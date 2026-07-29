@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Обрезка медиа — локально в браузере</title>
+<style>
+  /* ===========================================================
+     ДИЗАЙН-ТОКЕНЫ
+     Тёмная «монтажная» палитра: угольный фон, бирюзовый акцент
+     для UI/маркеров, янтарный — для выделенного диапазона.
+     =========================================================== */
+  :root{
+    --ink:        #14161A;
+    --panel:      #1C1F26;
+    --panel-2:    #23272F;
+    --line:       #2A2E37;
+    --fg:         #E8E6E1;
+    --fg-muted:   #8B909C;
+    --accent:     #4FD1C5;   /* бирюзовый — маркеры, кнопки */
+    --accent-dim: #2E7D74;
+    --range:      #F2A65A;   /* янтарный — выделенный диапазон */
+    --danger:     #E2665A;
+
+    --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+    --font-body:    'Inter', 'Segoe UI', sans-serif;
+    --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background: var(--ink);
+    color: var(--fg);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  header{
+    margin-bottom: 28px;
+  }
+  header h1{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  header h1 .cut{ color: var(--accent); }
+  header p{
+    margin:0;
+    color: var(--fg-muted);
+    font-size: 14px;
+  }
+
+  /* ---------- Загрузка ---------- */
+  #dropzone{
+    border: 1.5px dashed var(--line);
+    border-radius: 12px;
+    padding: 56px 24px;
+    text-align: center;
+    background: var(--panel);
+    transition: border-color .15s ease, background .15s ease;
+    cursor: pointer;
+  }
+  #dropzone.drag-over{
+    border-color: var(--accent);
+    background: var(--panel-2);
+  }
+  #dropzone p.big{
+    font-family: var(--font-display);
+    font-size: 18px;
+    margin: 0 0 6px;
+  }
+  #dropzone p.small{
+    color: var(--fg-muted);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  #fileInput{ display:none; }
+  .btn{
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 20px;
+    cursor: pointer;
+    color: var(--ink);
+    background: var(--accent);
+    transition: transform .1s ease, filter .15s ease;
+  }
+  .btn:hover{ filter: brightness(1.08); }
+  .btn:active{ transform: scale(0.98); }
+  .btn:disabled{ opacity: .5; cursor: not-allowed; }
+  .btn.secondary{
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--line);
+  }
+  .btn:focus-visible, .marker:focus-visible{
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  #errorMsg{
+    color: var(--danger);
+    font-size: 13px;
+    margin-top: 14px;
+    min-height: 18px;
+  }
+
+  /* ---------- Редактор ---------- */
+  #editor[hidden]{ display:none; }
+
+  .preview-wrap{
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 16/9;
+    max-height: 420px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #mediaEl{ width:100%; height:100%; object-fit:contain; display:block; }
+  #audioBadge{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; color: var(--fg-muted);
+    background: radial-gradient(circle at 50% 40%, var(--panel-2), var(--ink));
+  }
+  /* Критично: ID-селектор выше по специфичности, чем встроенное [hidden]{display:none}
+     браузера, поэтому без явного правила плашка "audio.mp3" перекрывала бы видео
+     даже с проставленным атрибутом hidden. */
+  #audioBadge[hidden]{ display:none; }
+  #audioBadge svg{ width:56px; height:56px; color: var(--accent); }
+  #audioBadge span{ font-family: var(--font-mono); font-size: 12px; }
+
+  .transport{
+    display:flex; align-items:center; justify-content:space-between;
+    margin: 14px 0 10px;
+  }
+  .time-readout{
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--fg-muted);
+  }
+  .time-readout #curTime{ color: var(--fg); }
+
+  /* ---------- Таймлайн: главный интерактивный элемент ---------- */
+  .timeline-wrap{
+    position: relative;
+    height: 96px;
+    border-radius: 8px;
+    overflow: visible;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    touch-action: none;
+  }
+  #timelineCanvas{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    border-radius: 8px;
+    display:block;
+  }
+  .trim-range{
+    position:absolute; top:0; bottom:0;
+    background: rgba(242,166,90,0.18);
+    border-top: 2px solid var(--range);
+    border-bottom: 2px solid var(--range);
+    pointer-events:none;
+  }
+  .playhead{
+    position:absolute; top:-4px; bottom:-4px;
+    width:2px; background: #fff;
+    box-shadow: 0 0 6px rgba(255,255,255,.6);
+    pointer-events:none;
+    left:0%;
+  }
+  .marker{
+    position:absolute; top:-6px; bottom:-6px;
+    width: 14px; margin-left:-7px;
+    cursor: ew-resize;
+    display:flex; align-items:flex-start; justify-content:center;
+  }
+  .marker::before{
+    content:"";
+    position:absolute; top:0; bottom:0; left:50%;
+    width:3px; margin-left:-1.5px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .marker::after{
+    /* «зубец» киноплёнки — форма ручки маркера */
+    content:"";
+    position:absolute; top:-6px; left:50%;
+    width:14px; height:12px; margin-left:-7px;
+    background: var(--accent);
+    clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+  }
+  .marker-time{
+    position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    white-space:nowrap;
+    color: var(--accent);
+    background: var(--ink);
+    padding: 2px 5px;
+    border-radius: 4px;
+    border:1px solid var(--line);
+  }
+
+  .controls-row{
+    display:flex; flex-wrap:wrap; gap:20px;
+    margin: 18px 0 6px;
+    font-size: 13px;
+    color: var(--fg-muted);
+  }
+  .controls-row label{ display:flex; flex-direction:column; gap:4px; }
+  .controls-row input[type="text"]{
+    font-family: var(--font-mono);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--fg);
+    border-radius: 6px;
+    padding: 6px 8px;
+    width: 110px;
+    font-size: 13px;
+  }
+  .controls-row .value{ color: var(--fg); font-family: var(--font-mono); }
+
+  .export-row{
+    display:flex; align-items:center; gap:16px;
+    margin-top: 22px;
+    flex-wrap: wrap;
+  }
+  #progressWrap{ flex:1; min-width:180px; }
+  #progressWrap[hidden]{ display:none; }
+  .progress-track{
+    height:6px; border-radius:4px; background: var(--panel-2);
+    overflow:hidden;
+  }
+  #progressBar{
+    height:100%; width:0%; background: var(--accent);
+    transition: width .12s linear;
+  }
+  #progressLabel{
+    font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted);
+    display:block; margin-top:4px;
+  }
+
+  .log-panel{
+    margin-top: 20px;
+    background: #0F1115;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fg-muted);
+    max-height: 130px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .log-panel div.err{ color: var(--danger); }
+
+  .footer-actions{
+    margin-top: 18px;
+    display:flex; justify-content:flex-end;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>Обреза<span class="cut">|</span>ка медиа</h1>
+    <p>Видео и аудио обрабатываются полностью в браузере — файлы никуда не отправляются.</p>
+  </header>
+
+  <main>
+    <!-- ЗОНА ЗАГРУЗКИ -->
+    <section id="dropzone" tabindex="0">
+      <p class="big">Перетащите файл сюда</p>
+      <p class="small">Поддерживаются: MP3, WAV, MP4, WEBM</p>
+      <button class="btn" id="pickBtn" type="button">Выбрать файл</button>
+      <input type="file" id="fileInput" accept=".mp3,.wav,.mp4,.webm,audio/*,video/*">
+      <div id="errorMsg"></div>
+    </section>
+
+    <!-- РЕДАКТОР -->
+    <section id="editor" hidden>
+      <div class="preview-wrap">
+        <video id="mediaEl" playsinline></video>
+        <div id="audioBadge" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+          <span id="audioFileName">audio.mp3</span>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="btn" id="playRangeBtn" type="button">▶ Воспроизвести фрагмент</button>
+        <div class="time-readout"><span id="curTime">00:00.000</span> / <span id="totalTime">00:00.000</span></div>
+      </div>
+
+      <div class="timeline-wrap" id="timelineWrap">
+        <canvas id="timelineCanvas"></canvas>
+        <div class="trim-range" id="trimRange"></div>
+        <div class="playhead" id="playhead"></div>
+        <div class="marker" id="markerStart" tabindex="0" role="slider" aria-label="Начало фрагмента">
+          <div class="marker-time" id="startTimeLabel">00:00.000</div>
+        </div>
+        <div class="marker" id="markerEnd" tabindex="0" role="slider" aria-label="Конец фрагмента">
+          <div class="marker-time" id="endTimeLabel">00:00.000</div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <label>Начало (мм:сс.ссс)
+          <input type="text" id="startInput" value="00:00.000">
+        </label>
+        <label>Конец (мм:сс.ссс)
+          <input type="text" id="endInput" value="00:00.000">
+        </label>
+        <label>Длительность выделения
+          <span class="value" id="selDuration">00:00.000</span>
+        </label>
+      </div>
+
+      <div class="controls-row">
+        <label style="flex-direction:row; align-items:center; gap:8px;">
+          <input type="checkbox" id="accurateModeCheckbox" style="width:auto;">
+          Точная обрезка (перекодирование, медленнее)
+        </label>
+      </div>
+      <p style="font-size:12px; color:var(--fg-muted); margin:4px 0 0;">
+        По умолчанию — быстрая обрезка без перекодирования: копирует видео как есть,
+        точка обрезки округляется до ближайшего опорного кадра. Работает с любым
+        кодеком, включая AV1 из некоторых экранных записей. «Точная обрезка»
+        режет ровно по миллисекунде, но требует, чтобы ffmpeg.wasm умел
+        декодировать исходный кодек (AV1 сейчас не поддерживается).
+      </p>
+
+      <div class="export-row">
+        <button class="btn" id="exportBtn" type="button">✂ Обрезать и сохранить</button>
+        <div id="progressWrap" hidden>
+          <div class="progress-track"><div id="progressBar"></div></div>
+          <span id="progressLabel">Готовим ffmpeg.wasm…</span>
+        </div>
+      </div>
+
+      <div class="log-panel" id="logPanel"></div>
+
+      <div class="footer-actions">
+        <button class="btn secondary" id="resetBtn" type="button">Загрузить другой файл</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+/* =========================================================================
+   МОДУЛЬ: ffmpeg.wasm.
+   Пакет @ffmpeg/ffmpeg импортируется из ЛОКАЛЬНОЙ папки ./vendor/, а не с CDN.
+   Причина: внутри пакета worker.js создаётся через
+   `new URL('./worker.js', import.meta.url)` и сам содержит относительные
+   импорты (const.js, errors.js). Если тянуть пакет с CDN, воркер пытается
+   загрузиться с origin CDN, браузер это блокирует, и — что хуже —
+   даже обходной путь через blob-URL не помогает, потому что относительные
+   импорты внутри worker.js не могут разрешиться относительно blob:.
+   Один раз загруженный локально пакет решает это полностью: origin общий,
+   относительные пути настоящие.
+   Ядро ffmpeg-core (тяжёлые .js/.wasm) по-прежнему берётся с CDN через
+   toBlobURL — там такой проблемы нет.
+   ========================================================================= */
+import { FFmpeg } from './vendor/ffmpeg/index.js';
+import { toBlobURL, fetchFile } from './vendor/util/index.js';
+
+let ffmpeg = null;
+let ffmpegLoaded = false;
+
+async function ensureFFmpegLoaded(){
+  if (ffmpegLoaded) return;
+  logMsg('Загружаем ffmpeg.wasm (один раз, ~30 МБ)…');
+  const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+
+  ffmpeg = new FFmpeg();
+  ffmpeg.on('log', ({ message }) => logMsg(message));
+  ffmpeg.on('progress', ({ progress }) => updateProgress(progress));
+
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  ffmpegLoaded = true;
+  logMsg('ffmpeg.wasm готов.');
+}
+
+/* =========================================================================
+   DOM-ссылки
+   ========================================================================= */
+const dropzone      = document.getElementById('dropzone');
+const fileInput      = document.getElementById('fileInput');
+const pickBtn        = document.getElementById('pickBtn');
+const errorMsg       = document.getElementById('errorMsg');
+
+const editorSection  = document.getElementById('editor');
+const mediaEl        = document.getElementById('mediaEl');
+const audioBadge     = document.getElementById('audioBadge');
+const audioFileName  = document.getElementById('audioFileName');
+
+const playRangeBtn   = document.getElementById('playRangeBtn');
+const curTimeEl      = document.getElementById('curTime');
+const totalTimeEl    = document.getElementById('totalTime');
+
+const timelineWrap   = document.getElementById('timelineWrap');
+const timelineCanvas = document.getElementById('timelineCanvas');
+const trimRange      = document.getElementById('trimRange');
+const playhead       = document.getElementById('playhead');
+const markerStart    = document.getElementById('markerStart');
+const markerEnd      = document.getElementById('markerEnd');
+const startTimeLabel = document.getElementById('startTimeLabel');
+const endTimeLabel   = document.getElementById('endTimeLabel');
+
+const startInput     = document.getElementById('startInput');
+const endInput       = document.getElementById('endInput');
+const selDuration     = document.getElementById('selDuration');
+
+const exportBtn      = document.getElementById('exportBtn');
+const accurateModeCheckbox = document.getElementById('accurateModeCheckbox');
+const progressWrap   = document.getElementById('progressWrap');
+const progressBar    = document.getElementById('progressBar');
+const progressLabel  = document.getElementById('progressLabel');
+const logPanel       = document.getElementById('logPanel');
+const resetBtn       = document.getElementById('resetBtn');
+
+/* =========================================================================
+   Состояние приложения
+   ========================================================================= */
+let currentFile   = null;
+let isVideo       = true;
+let mediaDuration = 0;
+let startTime     = 0;
+let endTime       = 0;
+let objectURL     = null;
+let isPlayingRange = false;
+
+const ALLOWED_EXT = ['.mp3', '.wav', '.mp4', '.webm'];
+
+/* =========================================================================
+   Утилиты
+   ========================================================================= */
+function formatTime(t){
+  if (!isFinite(t) || t < 0) t = 0;
+  const m = Math.floor(t / 60);
+  const s = t - m * 60;
+  return `${String(m).padStart(2,'0')}:${s.toFixed(3).padStart(6,'0')}`;
+}
+
+// Разбирает строку "мм:сс.ссс" обратно в секунды
+function parseTime(str){
+  const m = str.trim().match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseFloat(m[2]);
+}
+
+function getExt(name){
+  const m = name.match(/\.[^.]+$/);
+  return m ? m[0].toLowerCase() : '.mp4';
+}
+
+function logMsg(msg){
+  const line = document.createElement('div');
+  line.textContent = msg;
+  logPanel.appendChild(line);
+  logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+function updateProgress(fraction){
+  const pct = Math.min(100, Math.max(0, Math.round(fraction * 100)));
+  progressBar.style.width = pct + '%';
+  progressLabel.textContent = `Обработка… ${pct}%`;
+}
+
+/* =========================================================================
+   Загрузка файла (drag-and-drop + выбор через input)
+   =========================================================================
+   Файл не отправляется никуда: URL.createObjectURL создаёт локальную
+   ссылку на Blob в оперативной памяти. Кэширование между сессиями не
+   требуется по условиям задачи, поэтому IndexedDB здесь не используется —
+   как только страница закрыта, память освобождается браузером.
+   ========================================================================= */
+function validateFile(file){
+  const ext = getExt(file.name);
+  if (!ALLOWED_EXT.includes(ext)) {
+    return `Формат «${ext}» не поддерживается. Допустимы: ${ALLOWED_EXT.join(', ')}`;
+  }
+  return null;
+}
+
+function handleFile(file){
+  const err = validateFile(file);
+  if (err){
+    errorMsg.textContent = err;
+    return;
+  }
+  errorMsg.textContent = '';
+  currentFile = file;
+  isVideo = file.type.startsWith('video/') || ['.mp4', '.webm'].includes(getExt(file.name));
+
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = URL.createObjectURL(file);
+  mediaEl.src = objectURL;
+
+  dropzone.hidden = true;
+  editorSection.hidden = false;
+  logPanel.innerHTML = '';
+
+  mediaEl.addEventListener('loadedmetadata', onMetadataLoaded, { once: true });
+}
+
+async function onMetadataLoaded(){
+  mediaDuration = mediaEl.duration;
+  startTime = 0;
+  endTime = mediaDuration;
+  totalTimeEl.textContent = formatTime(mediaDuration);
+  updateMarkers();
+
+  const actuallyHasVideo = isVideo && mediaEl.videoWidth > 0;
+  audioBadge.hidden = actuallyHasVideo;
+  mediaEl.style.display = actuallyHasVideo ? 'block' : 'none';
+  if (!actuallyHasVideo) audioFileName.textContent = currentFile.name;
+
+  if (actuallyHasVideo){
+    await drawVideoThumbnails();
+  } else {
+    await drawWaveform();
+  }
+}
+
+/* Клики по зоне загрузки / drag & drop */
+pickBtn.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('click', (e) => { if (e.target === dropzone) fileInput.click(); });
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+['dragenter','dragover'].forEach(evt => {
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+});
+['dragleave','drop'].forEach(evt => {
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); });
+});
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+resetBtn.addEventListener('click', () => {
+  mediaEl.pause();
+  isPlayingRange = false;
+  currentFile = null;
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = null;
+  editorSection.hidden = true;
+  dropzone.hidden = false;
+  fileInput.value = '';
+});
+
+/* =========================================================================
+   Отрисовка таймлайна: форма волны (аудио) или превью-кадры (видео)
+   ========================================================================= */
+function sizeCanvasToWrap(){
+  const dpr = window.devicePixelRatio || 1;
+  const w = timelineWrap.clientWidth;
+  const h = timelineWrap.clientHeight;
+  timelineCanvas.width = w * dpr;
+  timelineCanvas.height = h * dpr;
+  const ctx = timelineCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+async function drawWaveform(){
+  logMsg('Строим форму волны…');
+  const { ctx, w, h } = sizeCanvasToWrap();
+  ctx.fillStyle = '#12141a';
+  ctx.fillRect(0, 0, w, h);
+
+  try {
+    const arrayBuf = await currentFile.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+    const data = audioBuffer.getChannelData(0);
+    const samplesPerPixel = Math.max(1, Math.floor(data.length / w));
+    const mid = h / 2;
+
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    for (let x = 0; x < w; x++){
+      let min = 1.0, max = -1.0;
+      const start = x * samplesPerPixel;
+      for (let i = 0; i < samplesPerPixel; i++){
+        const v = data[start + i] || 0;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      const y1 = mid + min * mid * 0.9;
+      const y2 = mid + max * mid * 0.9;
+      ctx.fillRect(x, y2, 1, Math.max(1, y1 - y2));
+    }
+    audioCtx.close();
+    logMsg('Форма волны готова.');
+  } catch (e){
+    logMsg('Не удалось построить форму волны: ' + e.message);
+  }
+}
+
+async function drawVideoThumbnails(){
+  logMsg('Извлекаем кадры для превью…');
+  const { ctx, w, h } = sizeCanvasToWrap();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  const count = Math.max(6, Math.floor(w / 90));
+  const step = mediaDuration / count;
+
+  // Отдельный скрытый video-элемент, чтобы не мешать основному плееру
+  const tempVideo = document.createElement('video');
+  tempVideo.src = objectURL;
+  tempVideo.muted = true;
+  await new Promise((resolve) => {
+    tempVideo.addEventListener('loadedmetadata', resolve, { once: true });
+  });
+
+  const frameCanvas = document.createElement('canvas');
+  frameCanvas.width = 160;
+  frameCanvas.height = 90;
+  const fctx = frameCanvas.getContext('2d');
+
+  for (let i = 0; i < count; i++){
+    const t = Math.min(mediaDuration - 0.05, i * step);
+    await seekTo(tempVideo, t);
+    try {
+      fctx.drawImage(tempVideo, 0, 0, frameCanvas.width, frameCanvas.height);
+      const destX = (i / count) * w;
+      const destW = w / count + 1;
+      ctx.drawImage(frameCanvas, destX, 0, destW, h);
+    } catch (e){ /* пропускаем кадр при ошибке декодирования */ }
+  }
+  logMsg('Превью-кадры готовы.');
+}
+
+function seekTo(videoEl, time){
+  return new Promise((resolve) => {
+    function onSeeked(){ videoEl.removeEventListener('seeked', onSeeked); resolve(); }
+    videoEl.addEventListener('seeked', onSeeked);
+    videoEl.currentTime = time;
+  });
+}
+
+window.addEventListener('resize', debounce(() => {
+  if (!currentFile) return;
+  if (audioBadge.hidden) drawVideoThumbnails(); else drawWaveform();
+}, 300));
+
+function debounce(fn, ms){
+  let id;
+  return (...args) => { clearTimeout(id); id = setTimeout(() => fn(...args), ms); };
+}
+
+/* =========================================================================
+   Маркеры начала/конца — перетаскивание мышью, тачем и клавиатурой
+   ========================================================================= */
+function timeToPercent(t){ return mediaDuration ? (t / mediaDuration) * 100 : 0; }
+function percentToTime(p){ return (p / 100) * mediaDuration; }
+
+function updateMarkers(){
+  const sPct = timeToPercent(startTime);
+  const ePct = timeToPercent(endTime);
+  markerStart.style.left = sPct + '%';
+  markerEnd.style.left = ePct + '%';
+  trimRange.style.left = sPct + '%';
+  trimRange.style.width = Math.max(0, ePct - sPct) + '%';
+  startTimeLabel.textContent = formatTime(startTime);
+  endTimeLabel.textContent = formatTime(endTime);
+  startInput.value = formatTime(startTime);
+  endInput.value = formatTime(endTime);
+  selDuration.textContent = formatTime(endTime - startTime);
+}
+
+function makeDraggable(marker, which){
+  marker.addEventListener('pointerdown', (e) => {
+    marker.setPointerCapture(e.pointerId);
+    const onMove = (ev) => {
+      const rect = timelineWrap.getBoundingClientRect();
+      let pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      pct = Math.min(100, Math.max(0, pct));
+      let t = percentToTime(pct);
+      if (which === 'start'){
+        startTime = Math.max(0, Math.min(t, endTime - 0.05));
+      } else {
+        endTime = Math.min(mediaDuration, Math.max(t, startTime + 0.05));
+      }
+      updateMarkers();
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+
+  // Клавиатура: стрелки двигают маркер на 0.05с, Shift — на 1с
+  marker.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 1 : 0.05;
+    if (e.key === 'ArrowLeft'){
+      if (which === 'start') startTime = Math.max(0, startTime - step);
+      else endTime = Math.max(startTime + 0.05, endTime - step);
+      updateMarkers();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight'){
+      if (which === 'start') startTime = Math.min(endTime - 0.05, startTime + step);
+      else endTime = Math.min(mediaDuration, endTime + step);
+      updateMarkers();
+      e.preventDefault();
+    }
+  });
+}
+makeDraggable(markerStart, 'start');
+makeDraggable(markerEnd, 'end');
+
+/* Ручной ввод времени текстом */
+startInput.addEventListener('change', () => {
+  const t = parseTime(startInput.value);
+  if (t !== null) startTime = Math.max(0, Math.min(t, endTime - 0.05));
+  updateMarkers();
+});
+endInput.addEventListener('change', () => {
+  const t = parseTime(endInput.value);
+  if (t !== null) endTime = Math.min(mediaDuration, Math.max(t, startTime + 0.05));
+  updateMarkers();
+});
+
+/* =========================================================================
+   Воспроизведение только выделенного фрагмента
+   ========================================================================= */
+mediaEl.addEventListener('timeupdate', () => {
+  const pct = timeToPercent(mediaEl.currentTime);
+  playhead.style.left = pct + '%';
+  curTimeEl.textContent = formatTime(mediaEl.currentTime);
+
+  if (isPlayingRange && mediaEl.currentTime >= endTime){
+    mediaEl.pause();
+    isPlayingRange = false;
+    playRangeBtn.textContent = '▶ Воспроизвести фрагмент';
+  }
+});
+
+playRangeBtn.addEventListener('click', () => {
+  if (isPlayingRange){
+    mediaEl.pause();
+    isPlayingRange = false;
+    playRangeBtn.textContent = '▶ Воспроизвести фрагмент';
+    return;
+  }
+  mediaEl.currentTime = startTime;
+  mediaEl.play();
+  isPlayingRange = true;
+  playRangeBtn.textContent = '⏸ Остановить';
+});
+
+/* =========================================================================
+   Экспорт: обрезка через ffmpeg.wasm и скачивание результата
+   ========================================================================= */
+/* Быстрый режим: только копирование пакетов, без декодирования/кодирования.
+   Работает с любым кодеком (включая AV1), т.к. ffmpeg не декодирует видео —
+   просто вырезает нужный диапазон готовых пакетов. Обрезка привязывается
+   к ближайшему опорному кадру (keyframe), поэтому точка старта может
+   сдвинуться на доли секунды. */
+function getFastCodecArgs(ext){
+  const args = ['-c', 'copy'];
+  if (ext === 'mp4') args.push('-movflags', '+faststart');
+  return args;
+}
+
+/* Точный режим: полное перекодирование — декодирует исходное видео и
+   кодирует заново, поэтому обрезка попадает ровно в указанную миллисекунду.
+   Требует, чтобы ffmpeg.wasm умел декодировать исходный кодек (для AV1
+   сейчас это не так — см. лог с "Missing Sequence Header"). */
+function getAccurateCodecArgs(ext){
+  switch (ext){
+    case 'mp4':  return ['-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac', '-movflags', '+faststart'];
+    case 'webm': return ['-c:v', 'libvpx-vp9', '-c:a', 'libopus'];
+    case 'mp3':  return ['-c:a', 'libmp3lame'];
+    case 'wav':  return ['-c:a', 'pcm_s16le'];
+    default:     return ['-c', 'copy'];
+  }
+}
+function getMime(ext){
+  return { mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext]
+    || 'application/octet-stream';
+}
+
+/* Сохранение результата. Если браузер поддерживает File System Access API
+   (Chrome, Edge, YaBrowser на Chromium) — открываем системный диалог
+   «Сохранить как», чтобы выбрать папку и имя файла. Firefox и Safari этот
+   API пока не поддерживают — для них используется обычная загрузка через
+   <a download>, файл уйдёт в папку загрузок по умолчанию. */
+async function saveOutputFile(blob, suggestedName, ext){
+  if ('showSaveFilePicker' in window){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{
+          description: 'Обрезанный медиафайл',
+          accept: { [getMime(ext)]: ['.' + ext] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      logMsg('Файл сохранён в выбранное расположение.');
+      return;
+    } catch (err){
+      if (err.name === 'AbortError'){
+        logMsg('Сохранение отменено.');
+        return;
+      }
+      logMsg('Диалог выбора папки недоступен, скачиваем обычным способом…');
+      // и переходим к запасному варианту ниже
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
+  logMsg('Файл сохранён в папку загрузок браузера.');
+}
+
+exportBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  exportBtn.disabled = true;
+  progressWrap.hidden = false;
+  progressBar.style.width = '0%';
+  progressLabel.textContent = 'Готовим ffmpeg.wasm…';
+
+  const ext = getExt(currentFile.name).replace('.', '');
+  const inputName = 'input.' + ext;
+  const outputName = 'output.' + ext;
+
+  try {
+    await ensureFFmpegLoaded();
+
+    logMsg('Читаем исходный файл…');
+    const data = await fetchFile(currentFile);
+    await ffmpeg.writeFile(inputName, data);
+
+    const duration = endTime - startTime;
+    const accurate = accurateModeCheckbox.checked;
+    logMsg(`Обрезаем (${accurate ? 'точный режим, перекодирование' : 'быстрый режим, без перекодирования'}): ` +
+           `старт ${formatTime(startTime)}, длительность ${formatTime(duration)}…`);
+
+    let ffmpegArgs;
+    if (accurate){
+      // -ss после -i => точный (но не самый быстрый) поиск по кадрам;
+      // -t задаёт длительность относительно -ss. Требует декодирования.
+      ffmpegArgs = [
+        '-i', inputName,
+        '-ss', startTime.toString(),
+        '-t', duration.toString(),
+        ...getAccurateCodecArgs(ext),
+        outputName
+      ];
+    } else {
+      // -ss ДО -i => быстрый поиск по ключевым кадрам без декодирования;
+      // с -c copy это единственный режим, который работает вообще с любым
+      // кодеком, включая те, что этот ffmpeg.wasm не умеет декодировать.
+      ffmpegArgs = [
+        '-ss', startTime.toString(),
+        '-i', inputName,
+        '-t', duration.toString(),
+        ...getFastCodecArgs(ext),
+        outputName
+      ];
+    }
+
+    const ret = await ffmpeg.exec(ffmpegArgs);
+
+    // КРИТИЧНО: ffmpeg.exec() не бросает JS-исключение при ошибке
+    // кодирования — она просто пишется в лог, а возвращаемый код
+    // отличен от нуля. Без этой проверки мы бы сохраняли пустой
+    // или повреждённый файл, даже если сам ffmpeg сообщил об ошибке.
+    if (ret !== 0){
+      const hint = accurate
+        ? ' Если исходное видео в кодеке AV1 — попробуйте выключить «Точную обрезку», ' +
+          'этот кодек пока не декодируется в браузере.'
+        : '';
+      throw new Error(
+        `ffmpeg завершился с ошибкой (код ${ret}).${hint} Смотрите лог выше — ` +
+        `там последние строки вывода ffmpeg с описанием причины.`
+      );
+    }
+
+    const outData = await ffmpeg.readFile(outputName);
+    if (!outData || outData.length === 0){
+      throw new Error('ffmpeg вернул пустой файл — обрезка не удалась.');
+    }
+    const blob = new Blob([outData.buffer], { type: getMime(ext) });
+    await saveOutputFile(blob, 'trimmed_' + currentFile.name, ext);
+
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+
+    progressLabel.textContent = 'Готово!';
+    logMsg('Обработка завершена.');
+  } catch (err){
+    logMsg('Ошибка: ' + err.message);
+    progressLabel.textContent = 'Ошибка обработки';
+    console.error(err);
+  } finally {
+    exportBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
