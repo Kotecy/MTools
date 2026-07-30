@@ -1,6 +1,6 @@
 <div align="center">
 
-# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup> <img src="https://cdn-icons-png.flaticon.com/128/686/686589.png" height=28 />
+# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup>
 
 **Локальные медиа-инструменты в браузере.**  
 Всё работает на вашем компьютере — файлы никуда не отправляются.
