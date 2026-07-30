@@ -28,6 +28,40 @@ else:
 
 os.chdir(BASE_DIR)
 os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+# ffmpeg for yt-dlp: use bundled in frozen EXE (if exists), else system
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys._MEIPASS)
+    bundled_ffmpeg = BASE_DIR / "ffmpeg.exe"
+    # Debug: check if ffmpeg exists in _MEIPASS
+    import os
+    debug_log = BASE_DIR.parent / "mtools_debug.log"
+    with open(debug_log, "a", encoding="utf-8") as f:
+        f.write(f"[DEBUG] BASE_DIR: {BASE_DIR}\n")
+        f.write(f"[DEBUG] bundled_ffmpeg: {bundled_ffmpeg}\n")
+        f.write(f"[DEBUG] exists: {bundled_ffmpeg.exists()}\n")
+    if not bundled_ffmpeg.exists():
+        # Try alternative locations
+        alt_paths = [
+            BASE_DIR / "ffmpeg",
+            BASE_DIR.parent / "ffmpeg.exe",
+            Path(sys.executable).parent / "ffmpeg.exe",
+        ]
+        for p in alt_paths:
+            with open(debug_log, "a", encoding="utf-8") as f:
+                f.write(f"[DEBUG] checking alt: {p} -> {p.exists()}\n")
+            if p.exists():
+                bundled_ffmpeg = p
+                break
+    FFMPEG_PATH = str(bundled_ffmpeg) if bundled_ffmpeg.exists() else None
+    with open(debug_log, "a", encoding="utf-8") as f:
+        f.write(f"[DEBUG] FFMPEG_PATH: {FFMPEG_PATH}\n")
+    if FFMPEG_PATH:
+        os.environ['PATH'] = str(BASE_DIR) + os.pathsep + os.environ.get('PATH', '')
+else:
+    BASE_DIR = Path(__file__).parent
+    FFMPEG_PATH = None
+
 # Redirect stderr to avoid crashes in no-console mode
 if not sys.stderr:
     sys.stderr = open(os.devnull, 'w')
@@ -182,6 +216,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "no_warnings": True,
                 "postprocessors": postprocessors,
                 "merge_output_format": "mp4" if fmt == "mp4" else None,
+                "ffmpeg_location": FFMPEG_PATH,
             }
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -275,6 +310,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "no_warnings": True,
                 "postprocessors": postprocessors,
                 "merge_output_format": merge,
+                "ffmpeg_location": FFMPEG_PATH,
             }
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)

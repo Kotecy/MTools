@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MTools — Медиа-инструменты в браузере</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MTools — Медиа-инструменты в браузере</title>
+  <link rel="icon" href="mt.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -325,10 +326,21 @@ button{ font-family:inherit; cursor:pointer; }
 .preview-wrap{
   position: relative;
   background: #000;
+  width: 100%;
   aspect-ratio: 16/9;
   max-height: 420px;
+  overflow: hidden;
 }
-#mediaEl{ width:100%; height:100%; object-fit:contain; cursor:pointer; display:block; }
+#mediaEl{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
 .volume-wrap{
   position:absolute; top:0; right:0; bottom:0;
   display:flex; align-items:center; justify-content:center;
@@ -774,7 +786,7 @@ button{ font-family:inherit; cursor:pointer; }
         <div class="transport">
           <button class="btn primary btn-sm" id="playRangeBtn" type="button">
             <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Воспроизвести фрагмент
+            Воспроизвести
           </button>
           <div class="time-readout"><span id="curTime">00:00.000</span> / <span id="totalTime">00:00.000</span></div>
         </div>
@@ -847,7 +859,7 @@ button{ font-family:inherit; cursor:pointer; }
     </section>
   </section>
 
-  <div class="version">V0.46</div>
+  <div class="version">V0.52</div>
 
   <!-- ========== YOUTUBE PAGE ========== -->
   <section id="page-youtube" class="page">
@@ -912,10 +924,9 @@ button{ font-family:inherit; cursor:pointer; }
             </label>
           </div>
 
-          <div class="quality-row">
+<div class="quality-row">
             <label for="ytQuality">Качество</label>
             <select id="ytQuality">
-              <option value="best">Лучшее</option>
               <option value="1080p">1080p</option>
               <option value="720p">720p</option>
               <option value="480p">480p</option>
@@ -983,8 +994,8 @@ function navigate(page){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const prev = document.querySelector('.active')?.id?.replace('page-', '') || 'home';
   if (prev !== page) {
-    if (prev === 'youtube' || page === 'home') resetYtState();
-    if (prev === 'trimmer' || page === 'home') resetTrimmerState();
+    if (prev === 'youtube') resetYtState();
+    if (prev === 'trimmer') resetTrimmerState();
   }
   const el = document.getElementById('page-' + page);
   if (el) el.classList.add('active');
@@ -1306,9 +1317,9 @@ function makeDraggable(marker, which){
 makeDraggable(markerStart, 'start');
 makeDraggable(markerEnd, 'end');
 
-// Click on timeline to seek (skip if was dragging or on marker/trim-range)
+// Click on timeline to seek (skip if was dragging or on marker)
 timelineWrap.addEventListener('click', (e) => {
-  if (e.target.closest('.marker') || e.target.closest('.trim-range') || wasDragging) { wasDragging = false; return; }
+  if (e.target.closest('.marker') || wasDragging) { wasDragging = false; return; }
   wasDragging = false;
   const rect = timelineWrap.getBoundingClientRect();
   let pct = ((e.clientX - rect.left) / rect.width) * 100;
@@ -1356,7 +1367,7 @@ const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height
 
 function syncPlayBtn(){
   if (mediaEl.paused && !isPlayingRange){
-    playRangeBtn.innerHTML = `${playIcon} Воспроизвести фрагмент`;
+    playRangeBtn.innerHTML = `${playIcon} Воспроизвести`;
   }
 }
 
@@ -1476,7 +1487,7 @@ exportBtn.addEventListener('click', async () => {
     const outData = await ffmpeg.readFile(outputName);
     if (!outData || outData.length === 0) throw new Error('ffmpeg вернул пустой файл — обрезка не удалась.');
     const blob = new Blob([outData.buffer], { type: getMime(ext) });
-    await saveOutputFile(blob, 'trimmed_' + currentFile.name, ext);
+    await saveOutputFile(blob, 'mtools_' + currentFile.name, ext);
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
     progressLabel.textContent = 'Готово!';
@@ -1569,11 +1580,15 @@ ytDownloadBtn.addEventListener('click', async () => {
   ytProgressBar.style.width = '0%';
   ytProgressLabel.textContent = 'Скачивание с YouTube… это может занять время';
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
     const res = await fetch('/api/youtube/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, format, quality }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
     if (!res.ok) {
       let errMsg = 'Ошибка скачивания';
       try { const err = await res.json(); errMsg = err.error || errMsg; } catch(e) {}
@@ -1586,11 +1601,12 @@ ytDownloadBtn.addEventListener('click', async () => {
     await saveOutputFile(blob, suggestedName, format);
     ytProgressLabel.textContent = 'Готово!';
   } catch (err) {
-    ytError.textContent = err.message;
-    ytProgressLabel.textContent = 'Ошибка, пробуем прямой переход…';
-    // Fallback: direct GET download
-    const dlUrl = `/api/youtube/download?url=${encodeURIComponent(url)}&format=${format}&quality=${quality}`;
-    window.open(dlUrl, '_blank');
+    if (err.name === 'AbortError') {
+      ytError.textContent = 'Превышено время ожидания (10 мин). Попробуйте другое качество.';
+    } else {
+      ytError.textContent = err.message;
+    }
+    ytProgressLabel.textContent = 'Ошибка';
   } finally {
     ytDownloadBtn.disabled = false;
     setTimeout(() => { ytProgressWrap.hidden = true; }, 1000);
@@ -1633,7 +1649,16 @@ setInterval(sendHeartbeat, 5000);
    SPACEBAR PLAYBACK + CLICK TO PLAY
    ========================================================================= */
 document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const tag = e.target.tagName;
+  const isUI = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+    e.target.closest('.trim-range') || e.target.closest('.marker') ||
+    e.target.closest('.option-row') || e.target.closest('.preview-wrap') ||
+    e.target.closest('.volume-wrap');
+  if (isUI && e.code === 'Space') {
+    e.preventDefault();
+    e.target.blur();
+    return;
+  }
   if (e.code === 'Space' && document.getElementById('page-trimmer').classList.contains('active') && currentFile) {
     e.preventDefault();
     if (mediaEl.paused) { mediaEl.play(); isPlayingRange = false; }
