@@ -20,6 +20,7 @@ from socketserver import ThreadingMixIn
 import urllib.parse
 import webbrowser
 import threading
+import uuid
 from pathlib import Path
 
 # PyInstaller resource path
@@ -136,6 +137,137 @@ def content_disposition_value(filename):
     return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
+# ── Progress-trackable YouTube download jobs ──────────────────
+# Downloading + converting can take a while, and the user has no way to
+# tell it's actually progressing vs. hung. So downloads run in a
+# background thread that reports live progress (bytes downloaded, %,
+# speed, ETA) via yt-dlp's progress_hooks, which the frontend polls.
+DOWNLOAD_JOBS = {}
+DOWNLOAD_JOBS_LOCK = threading.Lock()
+
+
+def build_ydl_opts(fmt, quality, outtmpl, progress_hooks=None, postprocessor_hooks=None):
+    if fmt == "mp3":
+        format_spec = "bestaudio/best"
+        postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
+        merge = None
+        ext = "mp3"
+    else:
+        quality_map = {
+            "best": "bestvideo+bestaudio/best",
+            "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
+            "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
+        }
+        format_spec = quality_map.get(quality, "bestvideo+bestaudio/best")
+        postprocessors = []
+        merge = "mp4"
+        ext = "mp4"
+    opts = {
+        "format": format_spec,
+        "outtmpl": outtmpl,
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "postprocessors": postprocessors,
+        "merge_output_format": merge,
+        "ffmpeg_location": FFMPEG_PATH,
+    }
+    if progress_hooks:
+        opts["progress_hooks"] = progress_hooks
+    if postprocessor_hooks:
+        opts["postprocessor_hooks"] = postprocessor_hooks
+    return opts, ext
+
+
+def cleanup_tmp_dir(tmp_dir):
+    try:
+        for f in Path(tmp_dir).iterdir():
+            try: f.unlink()
+            except: pass
+        os.rmdir(tmp_dir)
+    except: pass
+
+
+def run_download_job(job_id, url, fmt, quality):
+    tmp_dir = tempfile.mkdtemp(prefix="mtools_yt_")
+    with DOWNLOAD_JOBS_LOCK:
+        DOWNLOAD_JOBS[job_id] = {
+            "status": "starting", "downloaded": 0, "total": None, "percent": 0,
+            "speed": None, "eta": None, "error": None, "tmp_dir": tmp_dir,
+            "file_path": None, "filename": None, "ext": None,
+        }
+
+    def progress_hook(d):
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if not job:
+                return
+            if d.get("status") == "downloading":
+                downloaded = d.get("downloaded_bytes") or 0
+                total = d.get("total_bytes") or d.get("total_bytes_estimate")
+                job["status"] = "downloading"
+                job["downloaded"] = downloaded
+                job["total"] = total
+                job["percent"] = round(downloaded / total * 100, 1) if total else None
+                job["speed"] = d.get("speed")
+                job["eta"] = d.get("eta")
+            elif d.get("status") == "finished":
+                job["status"] = "processing"
+
+    def pp_hook(d):
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job and d.get("status") == "started":
+                job["status"] = "processing"
+
+    try:
+        outtmpl = os.path.join(tmp_dir, "%(title)s.%(ext)s")
+        ydl_opts, ext = build_ydl_opts(
+            fmt, quality, outtmpl,
+            progress_hooks=[progress_hook], postprocessor_hooks=[pp_hook],
+        )
+        from yt_dlp import YoutubeDL
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            title = info.get("title", "video")
+        files = list(Path(tmp_dir).iterdir())
+        candidates = [f for f in files if f.suffix == f".{ext}"]
+        downloaded_file = (
+            max(candidates, key=lambda f: f.stat().st_size) if candidates
+            else (max(files, key=lambda f: f.stat().st_size) if files else None)
+        )
+        if not downloaded_file or not downloaded_file.exists():
+            raise RuntimeError("Downloaded file not found")
+        file_size = wait_for_stable_file(downloaded_file)
+        safe_title = re.sub(r'[^\w\-_\. ]', '_', title)
+        suggested_name = f"{safe_title}.{ext}"
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job.update({
+                    "status": "finished", "percent": 100,
+                    "file_path": downloaded_file, "filename": suggested_name,
+                    "ext": ext, "total": file_size, "downloaded": file_size,
+                })
+    except ImportError:
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job["status"] = "error"
+                job["error"] = "yt-dlp not installed"
+        cleanup_tmp_dir(tmp_dir)
+    except Exception as e:
+        log_error("run_download_job", e)
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job["status"] = "error"
+                job["error"] = str(e)
+        cleanup_tmp_dir(tmp_dir)
+
+
 # ── Wait for a just-written file to be stable and unlocked ────
 # On Windows, antivirus real-time scanning can briefly lock a file right
 # after it's written, and buffered writes from ffmpeg/yt-dlp may not be
@@ -205,6 +337,10 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_youtube_info(parsed)
         elif parsed.path == "/api/youtube/download":
             self._handle_youtube_download_get(parsed)
+        elif parsed.path == "/api/youtube/progress":
+            self._handle_youtube_progress(parsed)
+        elif parsed.path == "/api/youtube/download/file":
+            self._handle_youtube_download_file(parsed)
         elif parsed.path == "/api/heartbeat":
             self._handle_heartbeat()
         else:
@@ -213,6 +349,8 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/youtube/download":
             self._handle_youtube_download()
+        elif self.path == "/api/youtube/download/start":
+            self._handle_youtube_download_start()
         elif self.path == "/api/shutdown":
             self._handle_shutdown()
         else:
@@ -375,6 +513,100 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 for f in Path(tmp_dir).iterdir(): f.unlink()
                 os.rmdir(tmp_dir)
             except: pass
+
+    # ── YouTube Download with progress (job-based) ─────────────
+    def _handle_youtube_download_start(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            ctype = self.headers.get("Content-Type", "")
+            if "application/json" in ctype:
+                data = json.loads(body)
+            else:
+                data = urllib.parse.parse_qs(body)
+                data = {k: v[0] if isinstance(v, list) else v for k, v in data.items()}
+        except Exception:
+            self._send_json({"error": "Invalid request"}, 400)
+            return
+        url = data.get("url")
+        fmt = data.get("format", "mp4")
+        quality = data.get("quality", "best")
+        if not url:
+            self._send_json({"error": "Parameter url is required"}, 400)
+            return
+        job_id = uuid.uuid4().hex
+        threading.Thread(
+            target=run_download_job, args=(job_id, url, fmt, quality), daemon=True,
+        ).start()
+        self._send_json({"job_id": job_id})
+
+    def _handle_youtube_progress(self, parsed):
+        params = urllib.parse.parse_qs(parsed.query)
+        job_id = params.get("id", [None])[0]
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if not job:
+                self._send_json({"error": "Unknown job"}, 404)
+                return
+            self._send_json({
+                "status": job["status"],
+                "downloaded": job["downloaded"],
+                "total": job["total"],
+                "percent": job["percent"],
+                "speed": job["speed"],
+                "eta": job["eta"],
+                "error": job["error"],
+            })
+
+    def _handle_youtube_download_file(self, parsed):
+        params = urllib.parse.parse_qs(parsed.query)
+        job_id = params.get("id", [None])[0]
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+        if not job:
+            self._send_json({"error": "Unknown job"}, 404)
+            return
+        if job["status"] == "error":
+            self._send_json({"error": job["error"] or "Download failed"}, 500)
+            with DOWNLOAD_JOBS_LOCK:
+                DOWNLOAD_JOBS.pop(job_id, None)
+            cleanup_tmp_dir(job["tmp_dir"])
+            return
+        if job["status"] != "finished":
+            self._send_json({"error": "Not ready yet"}, 409)
+            return
+        downloaded_file = job["file_path"]
+        file_size = job["total"]
+        suggested_name = job["filename"]
+        ext = job["ext"]
+        headers_sent = False
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", {
+                "mp4": "video/mp4", "mp3": "audio/mpeg",
+            }.get(ext, "application/octet-stream"))
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Content-Disposition", content_disposition_value(suggested_name))
+            self.end_headers()
+            headers_sent = True
+            BUFSIZE = 65536
+            sent = 0
+            with open(downloaded_file, "rb") as f:
+                while sent < file_size:
+                    chunk = f.read(min(BUFSIZE, file_size - sent))
+                    if not chunk:
+                        break
+                    send_all(self.wfile, chunk)
+                    sent += len(chunk)
+        except Exception as e:
+            log_error("_handle_youtube_download_file (streaming)", e)
+            if not headers_sent:
+                self._send_json({"error": str(e)}, 500)
+            return
+        finally:
+            with DOWNLOAD_JOBS_LOCK:
+                DOWNLOAD_JOBS.pop(job_id, None)
+            cleanup_tmp_dir(job["tmp_dir"])
 
     def _handle_heartbeat(self):
         self._send_json({"ok": True})

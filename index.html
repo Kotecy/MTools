@@ -682,6 +682,17 @@ button{ font-family:inherit; cursor:pointer; }
   margin-top: 20px;
 }
 .download-progress[hidden]{ display:none; }
+.download-progress .progress-track{ margin-bottom: 8px; }
+#ytProgressBar{
+  height:100%; width:0%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width .3s ease;
+  border-radius: 4px;
+}
+#ytProgressLabel{
+  font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted);
+  display:block;
+}
 
 /* ============================
    FOOTER ACTIONS
@@ -1569,6 +1580,25 @@ fetchInfoBtn.addEventListener('click', async () => {
   }
 });
 
+function formatBytes(bytes){
+  if (bytes == null) return '?';
+  if (bytes >= 1024*1024*1024) return (bytes/(1024*1024*1024)).toFixed(2) + ' ГБ';
+  if (bytes >= 1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' МБ';
+  if (bytes >= 1024) return (bytes/1024).toFixed(0) + ' КБ';
+  return bytes + ' Б';
+}
+function formatSpeed(bytesPerSec){
+  if (!bytesPerSec) return '';
+  return ' · ' + formatBytes(bytesPerSec) + '/с';
+}
+function formatEta(seconds){
+  if (seconds == null) return '';
+  const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+  return ' · осталось ' + (m > 0 ? `${m} мин ${s} с` : `${s} с`);
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
 ytDownloadBtn.addEventListener('click', async () => {
   if (!ytVideoData) { ytError.textContent = 'Сначала получите информацию о видео'; return; }
   const url = ytUrlInput.value.trim();
@@ -1578,23 +1608,67 @@ ytDownloadBtn.addEventListener('click', async () => {
   ytDownloadBtn.disabled = true;
   ytProgressWrap.hidden = false;
   ytProgressBar.style.width = '0%';
-  ytProgressLabel.textContent = 'Скачивание с YouTube… это может занять время';
+  ytProgressLabel.textContent = 'Запускаем скачивание…';
+  let cancelled = false;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
-    const res = await fetch('/api/youtube/download', {
+    // 1. Start the job — returns immediately with a job id.
+    const startRes = await fetch('/api/youtube/download/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, format, quality }),
-      signal: controller.signal
     });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      let errMsg = 'Ошибка скачивания';
-      try { const err = await res.json(); errMsg = err.error || errMsg; } catch(e) {}
+    if (!startRes.ok) {
+      let errMsg = 'Не удалось запустить скачивание';
+      try { const err = await startRes.json(); errMsg = err.error || errMsg; } catch(e) {}
       throw new Error(errMsg);
     }
-    const contentDisposition = res.headers.get('Content-Disposition') || '';
+    const { job_id } = await startRes.json();
+
+    // 2. Poll progress until it finishes or errors, updating the bar for real.
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 10 * 60 * 1000; // 10 min safety net
+    let jobData = null;
+    while (true) {
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        cancelled = true;
+        throw new Error('Превышено время ожидания (10 мин). Попробуйте другое качество.');
+      }
+      await sleep(500);
+      const progRes = await fetch('/api/youtube/progress?id=' + encodeURIComponent(job_id));
+      if (!progRes.ok) continue; // transient hiccup, keep polling
+      jobData = await progRes.json();
+      if (jobData.status === 'downloading') {
+        const pct = jobData.percent;
+        if (pct != null) {
+          ytProgressBar.style.width = pct + '%';
+          ytProgressLabel.textContent =
+            `Скачивание: ${pct.toFixed(0)}% (${formatBytes(jobData.downloaded)} / ${formatBytes(jobData.total)})` +
+            formatSpeed(jobData.speed) + formatEta(jobData.eta);
+        } else {
+          ytProgressBar.style.width = '50%';
+          ytProgressLabel.textContent = `Скачивание: ${formatBytes(jobData.downloaded)}` + formatSpeed(jobData.speed);
+        }
+      } else if (jobData.status === 'processing') {
+        ytProgressBar.style.width = '95%';
+        ytProgressLabel.textContent = 'Обработка (конвертация/склейка)…';
+      } else if (jobData.status === 'finished') {
+        ytProgressBar.style.width = '100%';
+        ytProgressLabel.textContent = 'Скачано, сохраняем файл…';
+        break;
+      } else if (jobData.status === 'error') {
+        throw new Error(jobData.error || 'Ошибка скачивания');
+      }
+      // status === 'starting' → keep waiting, bar stays at 0%
+    }
+
+    // 3. Job finished — fetch the actual file and save it.
+    const fileRes = await fetch('/api/youtube/download/file?id=' + encodeURIComponent(job_id));
+    if (!fileRes.ok) {
+      let errMsg = 'Ошибка получения файла';
+      try { const err = await fileRes.json(); errMsg = err.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+    const contentDisposition = fileRes.headers.get('Content-Disposition') || '';
     let suggestedName = null;
     const starMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
     if (starMatch) {
@@ -1605,19 +1679,15 @@ ytDownloadBtn.addEventListener('click', async () => {
       if (plainMatch) suggestedName = plainMatch[1];
     }
     if (!suggestedName) suggestedName = 'youtube_' + Date.now() + '.' + format;
-    const blob = await res.blob();
+    const blob = await fileRes.blob();
     await saveOutputFile(blob, suggestedName, format);
     ytProgressLabel.textContent = 'Готово!';
   } catch (err) {
-    if (err.name === 'AbortError') {
-      ytError.textContent = 'Превышено время ожидания (10 мин). Попробуйте другое качество.';
-    } else {
-      ytError.textContent = err.message;
-    }
+    ytError.textContent = err.message;
     ytProgressLabel.textContent = 'Ошибка';
   } finally {
     ytDownloadBtn.disabled = false;
-    setTimeout(() => { ytProgressWrap.hidden = true; }, 1000);
+    setTimeout(() => { ytProgressWrap.hidden = true; }, 1500);
   }
 });
 
