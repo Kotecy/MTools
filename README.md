@@ -52,7 +52,7 @@
 ## ⚙️ Установка
 
 ### 🪟 Готовый .exe (Windows)
-1. Скачайте `MTools.exe` из [релизов](https://github.com/ваш-username/ваш-репозиторий/releases)
+1. Скачайте `MTools.exe` из [релизов](https://github.com/Kotecy/MFast-Video-Editor-in-browser/releases)
 2. Запустите — откроется браузер с приложением (`http://localhost:8000`)
 3. Ничего устанавливать не нужно — внутри Python, yt-dlp, ffmpeg.wasm и ffmpeg
 4. Закройте вкладку — сервер остановится сам. Либо нажмите **«Выключить сервер»**
