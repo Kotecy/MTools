@@ -1,167 +1,210 @@
-# MTools <!-- V0.718 -->
+<div align="center">
 
-**Локальные медиа-инструменты в браузере.** Всё работает на вашем компьютере — файлы никуда не отправляются.
+# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup> <img src="https://cdn-icons-png.flaticon.com/128/686/686589.png" height=28 />
 
-Единое окно для обрезки видео/аудио и скачивания с YouTube. Сервер на Python, интерфейс — vanilla JS. Работает полностью локально, без интернета (кроме YouTube-качалки).
+**Локальные медиа-инструменты в браузере.**  
+Всё работает на вашем компьютере — файлы никуда не отправляются.
 
-## Возможности
+</div>
 
-### ✂️ Обрезка видео/аудио
-- Открыть MP4, WEBM, MP3 или WAV через drag'n'drop
-- Визуальный таймлайн с формой волны (AudioContext) для аудио и превью-кадрами для видео
-- Перетаскивание маркеров начала и конца; подсветка выделенного диапазона
-- Быстрая обрезка (stream copy — без перекодирования) или точная с перекодированием через **ffmpeg.wasm** (в браузере)
-- Встроенный плеер: клик по таймлайну — перемотка, перетаскивание — скраббинг, Space — пауза
-- Ползунок громкости появляется при наведении на превью
+> [!IMPORTANT]
+> Это десктопное приложение на Python + vanilla JS. Оно поднимает локальный HTTP-сервер и открывает интерфейс в браузере.  
+> Для обрезки используется ffmpeg.wasm прямо в браузере. Для скачивания с YouTube — yt-dlp на серверной стороне.  
+> Никаких внешних серверов, никакой телеметрии.
+
+## ✂️ Возможности
+
+### Обрезка видео/аудио
+- Открыть **MP4, WEBM, MP3 или WAV** через drag'n'drop
+- Визуальный таймлайн: форма волны (AudioContext) для аудио, превью-кадры для видео
+- Перетаскивание маркеров начала и конца, подсветка выделенного диапазона
+- **Быстрая обрезка** (stream copy — без перекодирования) или **точная** с перекодированием через ffmpeg.wasm
+- Встроенный плеер: клик по таймлайну → перемотка, перетаскивание → скраббинг, **Space** → пауза
+- Ползунок громкости по наведению на превью
 - Плеер автоматически удерживается в границах выделения
 - Результат скачивается через браузерный диалог (префикс `mtools_`)
 
 ### ⬇️ YouTube Download
-- Вставьте ссылку на YouTube видео — покажет название, канал, длительность, просмотры, обложку
-- Выбор формата: MP4 (360p / 480p / 720p / 1080p) или MP3
-- Скачивание через **yt-dlp** на серверной стороне с индикатором прогресса
-- Файл передаётся в браузер через HTTP и сохраняется через диалог скачивания
-- Таймаут 10 минут, поддержка не-ASCII (кириллица) в именах файлов (RFC 5987)
+- Вставьте ссылку — покажет название, канал, длительность, просмотры, обложку
+- Формат: **MP4** (360p / 480p / 720p / 1080p) или **MP3**
+- Скачивание через yt-dlp с индикатором прогресса
+- Поддержка кириллицы в именах файлов (RFC 5987)
+- Таймаут 10 минут
 
-## Скриншоты
+## 📸 Скриншоты
+
+<div align="center">
 
 **Главная**
+
 ![Главный экран](https://i.ibb.co/pvPqH70v/image.png)
 
 **Видео редактор**
+
 ![Обрезка видео](https://i.ibb.co/Z1mrpFtc/image.png)
 
 **Скачивание с YouTube**
+
 ![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
 
-## Установка
+</div>
 
-### Готовый .exe (Windows)
+## ⚙️ Установка
+
+### 🪟 Готовый .exe (Windows)
 1. Скачайте `MTools.exe` из [релизов](https://github.com/ваш-username/ваш-репозиторий/releases)
 2. Запустите — откроется браузер с приложением (`http://localhost:8000`)
-3. Ничего устанавливать не нужно (внутри Python, yt-dlp, ffmpeg.wasm и ffmpeg)
-4. Закройте вкладку — сервер остановится сам. Можно выключить вручную кнопкой "Выключить сервер"
+3. Ничего устанавливать не нужно — внутри Python, yt-dlp, ffmpeg.wasm и ffmpeg
+4. Закройте вкладку — сервер остановится сам. Либо нажмите **«Выключить сервер»**
 
-### Из исходников (Python)
+### 🐍 Из исходников (Python)
 ```bash
 pip install yt-dlp PyInstaller
 git clone https://github.com/ваш-username/ваш-репозиторий
 cd MTools
 python server.py
 ```
-
 Откроется `http://localhost:8000`.
 
-## Сборка .exe
+## 🔧 Сборка .exe
 ```bash
 pip install yt-dlp PyInstaller
 pyinstaller build.spec
 ```
 
-Исполняемый файл появится в `dist/MTools.exe`. Сборка включает `ffmpeg.exe` (для yt-dlp) и `vendor/` (ffmpeg.wasm для браузерной обрезки).
+Исполняемый файл — `dist/MTools.exe`. В сборку входят `ffmpeg.exe` (для yt-dlp) и `vendor/` (ffmpeg.wasm).
 
-## Структура проекта
+## 📁 Структура проекта
 ```
 MTools/
-├── server.py          # HTTP-сервер: API YouTube, heartbeat, раздача статики
+├── server.py          # HTTP-сервер: YouTube API, heartbeat, статика
 ├── index.html         # SPA-фронтенд (vanilla JS, ~1750 строк)
-├── build.spec         # Конфиг PyInstaller для сборки .exe
-├── mt.ico             # Иконка приложения
+├── build.spec         # Конфиг PyInstaller
+├── mt.ico             # Иконка
 ├── vendor/
 │   └── ffmpeg/        # ffmpeg.wasm (обрезка в браузере)
 ├── dist/
-│   └── MTools.exe     # Готовый исполняемый файл
+│   └── MTools.exe     # Собранный exe
 └── ffmpeg.exe         # Нативный ffmpeg для yt-dlp
 ```
 
-## Технологии
+## 🛠 Технологии
 | Слой | Технология |
 |------|-----------|
 | **Бэкенд** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp, ffmpeg |
-| **Фронтенд** | Vanilla JS, ffmpeg.wasm (в браузере), Web Audio API (форма волны) |
+| **Фронтенд** | Vanilla JS, ffmpeg.wasm, Web Audio API (форма волны) |
 | **Сборка** | PyInstaller (no-console, single-file .exe, ~160 МБ) |
-| **Дизайн** | Темная тема, Space Grotesk + Inter, кастомный CSS (без библиотек) |
+| **Дизайн** | Тёмная тема, Space Grotesk + Inter, кастомный CSS |
 
-## API endpoints
+## 🌐 API endpoints
 | Метод | Путь | Описание |
 |-------|------|----------|
-| `GET` | `/api/youtube/info?url=` | Информация о видео (название, длительность, просмотры) |
+| `GET` | `/api/youtube/info?url=` | Информация о видео |
 | `POST` | `/api/youtube/download/start` | Запустить скачивание (возвращает `job_id`) |
-| `GET` | `/api/youtube/progress?id=` | Прогресс скачивания (%, скорость, ETA) |
+| `GET` | `/api/youtube/progress?id=` | Прогресс скачивания |
 | `GET` | `/api/youtube/download/file?id=` | Скачать готовый файл |
-| `GET` | `/api/heartbeat` | Продлить жизнь сервера (сброс таймера 15 с) |
-| `POST` | `/api/shutdown` | Немедленное завершение сервера |
+| `GET` | `/api/heartbeat` | Продлить жизнь сервера |
+| `POST` | `/api/shutdown` | Завершить сервер |
 
-## Лицензия
+## ❓ Частые вопросы
+
+### Не открывается страница после запуска?
+Убедитесь, что порт 8000 не занят. Если занят — сервер сам найдёт свободный порт и выведет его в консоль.
+
+### ffmpeg.wasm не загружается?
+Проверьте папку `vendor/ffmpeg/` — она должна быть рядом с `index.html`. В .exe-версии всё уже встроено.
+
+### YouTube не скачивает?
+Убедитесь, что видео доступно и ссылка корректна. Проверьте `mtools_error.log` рядом с программой — там подробная информация об ошибке.
+
+## ⭐ Поддержка
+
+Поставьте :star: этому репозиторию, если проект оказался полезным.
+
+## ⚖️ Лицензия
 MIT
 
 ---
 
 <br>
 
-# MTools — English
+<div align="center">
 
-**Local media tools in your browser.** Everything runs on your machine — no files are sent anywhere.
+# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup> <img src="https://cdn-icons-png.flaticon.com/128/686/686589.png" height=28 />
 
-All-in-one tool for trimming video/audio and downloading from YouTube. Python backend, vanilla JS frontend. Fully local, no internet required (except YouTube downloader).
+**Local media tools in your browser.**  
+Everything runs on your machine — no files are sent anywhere.
 
-## Features
+</div>
 
-### ✂️ Video / Audio Trimmer
-- Open MP4, WEBM, MP3 or WAV via drag'n'drop
-- Visual timeline with audio waveform (AudioContext) or video preview frames
-- Drag start/end markers; highlighted selection range
-- Fast cut (stream copy — no re-encoding) or precise cut with **ffmpeg.wasm** (in-browser)
-- Built-in player: click timeline to seek, drag to scrub, Space to pause
-- Volume slider appears on hover over the preview
-- Player automatically stays within selection bounds
-- Result downloads via browser dialog (`mtools_` prefix)
+> [!IMPORTANT]
+> This is a desktop app built with Python + vanilla JS. It starts a local HTTP server and opens the UI in your browser.  
+> Trimming uses ffmpeg.wasm in-browser. YouTube downloads use yt-dlp on the server side.  
+> No external servers, no telemetry.
+
+## ✂️ Features
+
+### Video / Audio Trimmer
+- Open **MP4, WEBM, MP3 or WAV** via drag'n'drop
+- Visual timeline: audio waveform (AudioContext) or video preview frames
+- Drag start/end markers, highlighted selection range
+- **Fast cut** (stream copy — no re-encoding) or **precise** with ffmpeg.wasm
+- Built-in player: click timeline → seek, drag → scrub, **Space** → pause
+- Volume slider on preview hover
+- Player stays within selection bounds
+- Downloads with `mtools_` prefix
 
 ### ⬇️ YouTube Downloader
-- Paste a YouTube link — shows title, channel, duration, views, thumbnail
-- Format: MP4 (360p / 480p / 720p / 1080p) or MP3
-- Download via **yt-dlp** on the server with live progress indicator
-- File streams to browser and saves via download dialog
-- 10-minute timeout, non-ASCII filename support (RFC 5987)
+- Paste a link — shows title, channel, duration, views, thumbnail
+- Format: **MP4** (360p / 480p / 720p / 1080p) or **MP3**
+- Download via yt-dlp with live progress
+- Non-ASCII filename support (RFC 5987)
+- 10-minute timeout
 
-## Screenshots
+## 📸 Screenshots
+
+<div align="center">
 
 **Home**
+
 ![Home](https://i.ibb.co/pvPqH70v/image.png)
 
 **Video Editor**
+
 ![Video Editor](https://i.ibb.co/Z1mrpFtc/image.png)
 
 **YouTube Downloader**
+
 ![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
 
-## Installation
+</div>
 
-### Pre-built .exe (Windows)
+## ⚙️ Installation
+
+### 🪟 Pre-built .exe (Windows)
 1. Download `MTools.exe` from [releases](https://github.com/your-username/your-repo/releases)
-2. Run it — a browser tab opens with the app (`http://localhost:8000`)
-3. No additional setup needed (bundles Python, yt-dlp, ffmpeg.wasm and ffmpeg)
-4. Close the tab — the server stops automatically. Or press "Shutdown server"
+2. Run it — a browser tab opens (`http://localhost:8000`)
+3. No setup needed — bundles Python, yt-dlp, ffmpeg.wasm and ffmpeg
+4. Close the tab — server stops automatically. Or press **"Shutdown server"**
 
-### From source (Python)
+### 🐍 From source (Python)
 ```bash
 pip install yt-dlp PyInstaller
 git clone https://github.com/your-username/your-repo
 cd MTools
 python server.py
 ```
-
 Opens at `http://localhost:8000`.
 
-## Building .exe
+## 🔧 Building .exe
 ```bash
 pip install yt-dlp PyInstaller
 pyinstaller build.spec
 ```
 
-Output: `dist/MTools.exe`. Includes `ffmpeg.exe` (for yt-dlp) and `vendor/` (ffmpeg.wasm).
+Output: `dist/MTools.exe`. Bundles `ffmpeg.exe` (for yt-dlp) and `vendor/` (ffmpeg.wasm).
 
-## Project Structure
+## 📁 Project Structure
 ```
 MTools/
 ├── server.py          # HTTP server: YouTube API, heartbeat, static files
@@ -175,23 +218,38 @@ MTools/
 └── ffmpeg.exe         # Native ffmpeg for yt-dlp
 ```
 
-## Tech Stack
+## 🛠 Tech Stack
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp, ffmpeg |
 | **Frontend** | Vanilla JS, ffmpeg.wasm, Web Audio API (waveform) |
 | **Packaging** | PyInstaller (no-console, single-file .exe, ~160 MB) |
-| **Design** | Dark theme, Space Grotesk + Inter, custom CSS (no libraries) |
+| **Design** | Dark theme, Space Grotesk + Inter, custom CSS |
 
-## API Endpoints
+## 🌐 API Endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/youtube/info?url=` | Video info (title, duration, views) |
+| `GET` | `/api/youtube/info?url=` | Video info |
 | `POST` | `/api/youtube/download/start` | Start download (returns `job_id`) |
-| `GET` | `/api/youtube/progress?id=` | Download progress (%, speed, ETA) |
+| `GET` | `/api/youtube/progress?id=` | Download progress |
 | `GET` | `/api/youtube/download/file?id=` | Download finished file |
-| `GET` | `/api/heartbeat` | Keep server alive (resets 15s timer) |
-| `POST` | `/api/shutdown` | Shutdown server immediately |
+| `GET` | `/api/heartbeat` | Keep server alive |
+| `POST` | `/api/shutdown` | Shutdown server |
 
-## License
+## ❓ FAQ
+
+### The page doesn't open after launch?
+Check if port 8000 is free. If busy, the server auto-selects another port and shows it in the console.
+
+### ffmpeg.wasm won't load?
+Make sure `vendor/ffmpeg/` exists next to `index.html`. In the .exe version everything is pre-bundled.
+
+### YouTube downloads fail?
+Verify the video is accessible and the URL is correct. Check `mtools_error.log` next to the app for details.
+
+## ⭐ Support
+
+Star :star: this repo if you find it useful.
+
+## ⚖️ License
 MIT
