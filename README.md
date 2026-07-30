@@ -25,15 +25,9 @@
 
 ## Скриншоты
 
-<<<<<<< HEAD
 ![Главный экран](https://i.ibb.co/pvPqH70v/image.png)
 ![Обрезка видео](https://i.ibb.co/Z1mrpFtc/image.png)
 ![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
-=======
-![Главный экран]([https://via.placeholder.com/800x450/0D0E12/6EE7D1?text=MTools+Home](https://ibb.co/vxB9NFwx))
-![Обрезка видео]([https://via.placeholder.com/800x450/171A21/E8E6E1?text=Trimmer](https://ibb.co/3Yzb9jGS))
-![YouTube Download]([https://via.placeholder.com/800x450/171A21/F47174?text=YouTube+Download](https://ibb.co/ns792qSW))
->>>>>>> 881b6089585731a6609c862f4f3fc4436c111396
 
 ## Установка
 
