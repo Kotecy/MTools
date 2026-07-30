@@ -11,6 +11,8 @@ import sys
 import json
 import os
 import re
+import time
+import traceback
 import tempfile
 import http.server
 import socketserver
@@ -28,6 +30,26 @@ else:
 
 os.chdir(BASE_DIR)
 os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+ERROR_LOG_PATH = BASE_DIR / "mtools_error.log"
+
+def log_error(context, exc):
+    """Write the real exception (with traceback) to a log file and, if
+    available, to stderr. Without this, exceptions raised mid-download
+    (e.g. antivirus locking the file, or yt-dlp/ffmpeg failures) vanish
+    silently and only show up in the browser as a vague network error."""
+    msg = f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Error in {context}:\n"
+    msg += "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    try:
+        with open(ERROR_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(msg)
+    except OSError:
+        pass
+    try:
+        if sys.stderr:
+            sys.stderr.write(msg)
+    except Exception:
+        pass
 
 # ffmpeg for yt-dlp: use bundled in frozen EXE (if exists), else system
 if getattr(sys, 'frozen', False):
@@ -99,6 +121,71 @@ def format_views(count):
     return str(count)
 
 
+# ── Content-Disposition with non-ASCII (e.g. Cyrillic) filenames ──
+# HTTP header VALUES must be Latin-1 encodable. A YouTube title in
+# Russian (or any non-Latin script) breaks a naive
+# `filename="{title}.mp4"` header with UnicodeEncodeError, which used to
+# happen mid-response (after Content-Length was already sent), corrupting
+# the stream and showing up in the browser as
+# net::ERR_CONTENT_LENGTH_MISMATCH. Fix: send both a plain ASCII fallback
+# name and the real name percent-encoded per RFC 5987 (filename*=UTF-8'').
+def content_disposition_value(filename):
+    ascii_fallback = re.sub(r'[^\w\-. ]', '_', filename)
+    ascii_fallback = ascii_fallback.encode('ascii', 'ignore').decode('ascii').strip() or 'download'
+    encoded = urllib.parse.quote(filename, safe='')
+    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'
+
+
+# ── Wait for a just-written file to be stable and unlocked ────
+# On Windows, antivirus real-time scanning can briefly lock a file right
+# after it's written, and buffered writes from ffmpeg/yt-dlp may not be
+# flushed to disk the instant the process returns. If we trust stat()
+# immediately, the Content-Length we send can be larger than what we can
+# actually read, and the browser aborts the download with
+# net::ERR_CONTENT_LENGTH_MISMATCH. So: poll until the size stops
+# changing AND the file can be opened for reading before trusting it.
+def wait_for_stable_file(path, tries=40, delay=0.25):
+    last_size = -1
+    for _ in range(tries):
+        try:
+            size = path.stat().st_size
+        except OSError:
+            time.sleep(delay)
+            continue
+        if size == last_size and size > 0:
+            try:
+                with open(path, "rb"):
+                    pass
+            except PermissionError:
+                time.sleep(delay)
+                continue
+            return size
+        last_size = size
+        time.sleep(delay)
+    # Give up waiting for stability, return whatever we last saw
+    try:
+        return path.stat().st_size
+    except OSError:
+        return last_size if last_size > 0 else 0
+
+
+# ── Guaranteed full write to a (possibly unbuffered) socket file ──
+# BaseHTTPRequestHandler's wfile defaults to unbuffered (wbufsize=0),
+# meaning write() wraps the raw socket directly and is allowed to send
+# fewer bytes than requested (a partial write). If we don't loop until
+# everything is actually sent, the client receives fewer bytes than the
+# Content-Length we promised, and the browser aborts the download with
+# net::ERR_CONTENT_LENGTH_MISMATCH.
+def send_all(wfile, data):
+    view = memoryview(data)
+    total_sent = 0
+    while total_sent < len(view):
+        sent = wfile.write(view[total_sent:])
+        if not sent:
+            raise ConnectionError("Socket write returned 0/None — connection likely closed")
+        total_sent += sent
+
+
 # ── HTTP Handler ───────────────────────────────────────────────
 HTTPD_INSTANCE = [None]
 HEARTBEAT_TIMER = [None]
@@ -153,7 +240,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             from yt_dlp import YoutubeDL
-            ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": False}
+            ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": False, "noplaylist": True}
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             data = {
@@ -169,6 +256,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         except ImportError:
             self._send_json({"error": "yt-dlp not installed"}, 500)
         except Exception as e:
+            log_error("_handle_youtube_info", e)
             self._send_json({"error": str(e)}, 500)
 
     # ── YouTube Download ───────────────────────────────────────
@@ -214,6 +302,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "outtmpl": outtmpl,
                 "quiet": True,
                 "no_warnings": True,
+                "noplaylist": True,
                 "postprocessors": postprocessors,
                 "merge_output_format": "mp4" if fmt == "mp4" else None,
                 "ffmpeg_location": FFMPEG_PATH,
@@ -223,42 +312,64 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 title = info.get("title", "video")
             ext = "mp3" if fmt == "mp3" else "mp4"
             files = list(Path(tmp_dir).iterdir())
-            downloaded = None
-            for f in files:
-                if f.suffix == f".{ext}":
-                    downloaded = f
-                    break
-            if not downloaded:
-                downloaded = files[0] if files else None
+            # Pick the LARGEST file with the right extension, not just the
+            # first one found — if postprocessing left extra small sidecar
+            # files around (or a merge partially failed), grabbing "the
+            # first match" can pick a tiny stray file instead of the real
+            # media, which is a likely cause of near-instant, tiny,
+            # mismatched downloads.
+            candidates = [f for f in files if f.suffix == f".{ext}"]
+            if candidates:
+                downloaded = max(candidates, key=lambda f: f.stat().st_size)
+            else:
+                downloaded = max(files, key=lambda f: f.stat().st_size) if files else None
             if not downloaded or not downloaded.exists():
                 self._send_json({"error": "Downloaded file not found"}, 500)
                 return
-            file_size = downloaded.stat().st_size
+            file_size = wait_for_stable_file(downloaded)
             safe_title = re.sub(r'[^\w\-_\. ]', '_', title)
             suggested_name = f"{safe_title}.{ext}"
-            self.send_response(200)
-            self.send_header("Content-Type", {
-                "mp4": "video/mp4", "mp3": "audio/mpeg",
-            }.get(ext, "application/octet-stream"))
-            self.send_header("Content-Length", str(file_size))
-            self.send_header("Content-Disposition", f'attachment; filename="{suggested_name}"')
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            BUFSIZE = 65536
-            with open(downloaded, "rb") as f:
-                while True:
-                    chunk = f.read(BUFSIZE)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-            for f in Path(tmp_dir).iterdir():
-                try: f.unlink()
+            headers_sent = False
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", {
+                    "mp4": "video/mp4", "mp3": "audio/mpeg",
+                }.get(ext, "application/octet-stream"))
+                self.send_header("Content-Length", str(file_size))
+                self.send_header("Content-Disposition", content_disposition_value(suggested_name))
+                self.end_headers()
+                headers_sent = True
+                BUFSIZE = 65536
+                sent = 0
+                with open(downloaded, "rb") as f:
+                    while sent < file_size:
+                        chunk = f.read(min(BUFSIZE, file_size - sent))
+                        if not chunk:
+                            break
+                        send_all(self.wfile, chunk)
+                        sent += len(chunk)
+            except Exception as e:
+                # If headers (with a promised Content-Length) already went
+                # out, we CANNOT send a fresh JSON error on the same
+                # connection without corrupting the response the browser
+                # is mid-way through reading — that's exactly what used to
+                # cause a garbled net::ERR_CONTENT_LENGTH_MISMATCH. Instead
+                # log the real cause and let the connection drop; the
+                # browser will just report the failed download.
+                log_error("_handle_youtube_download (streaming file)", e)
+                if not headers_sent:
+                    self._send_json({"error": str(e)}, 500)
+                return
+            finally:
+                for f in Path(tmp_dir).iterdir():
+                    try: f.unlink()
+                    except: pass
+                try: os.rmdir(tmp_dir)
                 except: pass
-            try: os.rmdir(tmp_dir)
-            except: pass
         except ImportError:
             self._send_json({"error": "yt-dlp not installed"}, 500)
         except Exception as e:
+            log_error("_handle_youtube_download", e)
             self._send_json({"error": str(e)}, 500)
             try:
                 for f in Path(tmp_dir).iterdir(): f.unlink()
@@ -308,6 +419,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "outtmpl": outtmpl,
                 "quiet": True,
                 "no_warnings": True,
+                "noplaylist": True,
                 "postprocessors": postprocessors,
                 "merge_output_format": merge,
                 "ffmpeg_location": FFMPEG_PATH,
@@ -316,43 +428,53 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 info = ydl.extract_info(url, download=True)
                 title = info.get("title", "video")
             files = list(Path(tmp_dir).iterdir())
-            downloaded = None
-            for f in files:
-                if f.suffix == f".{ext}":
-                    downloaded = f
-                    break
-            if not downloaded:
-                downloaded = files[0] if files else None
+            candidates = [f for f in files if f.suffix == f".{ext}"]
+            if candidates:
+                downloaded = max(candidates, key=lambda f: f.stat().st_size)
+            else:
+                downloaded = max(files, key=lambda f: f.stat().st_size) if files else None
             if not downloaded or not downloaded.exists():
                 self._send_json({"error": "Downloaded file not found"}, 500)
                 return
-            file_size = downloaded.stat().st_size
+            file_size = wait_for_stable_file(downloaded)
             safe_title = re.sub(r'[^\w\-_\. ]', '_', title)
             suggested_name = f"{safe_title}.{ext}"
-            self.send_response(200)
-            self.send_header("Content-Type", {
-                "mp4": "video/mp4", "mp3": "audio/mpeg",
-            }.get(ext, "application/octet-stream"))
-            self.send_header("Content-Length", str(file_size))
-            self.send_header("Content-Disposition", f'attachment; filename="{suggested_name}"')
-            self.end_headers()
-            BUFSIZE = 65536
-            with open(downloaded, "rb") as f:
-                while True:
-                    chunk = f.read(BUFSIZE)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-            for f in Path(tmp_dir).iterdir():
-                try: f.unlink()
+            headers_sent = False
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", {
+                    "mp4": "video/mp4", "mp3": "audio/mpeg",
+                }.get(ext, "application/octet-stream"))
+                self.send_header("Content-Length", str(file_size))
+                self.send_header("Content-Disposition", content_disposition_value(suggested_name))
+                self.end_headers()
+                headers_sent = True
+                BUFSIZE = 65536
+                sent = 0
+                with open(downloaded, "rb") as f:
+                    while sent < file_size:
+                        chunk = f.read(min(BUFSIZE, file_size - sent))
+                        if not chunk:
+                            break
+                        send_all(self.wfile, chunk)
+                        sent += len(chunk)
+            except Exception as e:
+                log_error("_handle_youtube_download_get (streaming file)", e)
+                if not headers_sent:
+                    self._send_json({"error": str(e)}, 500)
+                return
+            finally:
+                for f in Path(tmp_dir).iterdir():
+                    try: f.unlink()
+                    except: pass
+                try: os.rmdir(tmp_dir)
                 except: pass
-            try: os.rmdir(tmp_dir)
-            except: pass
         except ImportError:
             try:
                 self.send_error(500, "yt-dlp not installed")
             except: pass
         except Exception as e:
+            log_error("_handle_youtube_download_get", e)
             try:
                 self._send_json({"error": str(e)}, 500)
             except: pass

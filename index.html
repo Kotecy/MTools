@@ -1595,8 +1595,16 @@ ytDownloadBtn.addEventListener('click', async () => {
       throw new Error(errMsg);
     }
     const contentDisposition = res.headers.get('Content-Disposition') || '';
-    const match = contentDisposition.match(/filename="?(.+?)"?$/);
-    const suggestedName = match ? match[1] : 'youtube_' + Date.now() + '.' + format;
+    let suggestedName = null;
+    const starMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (starMatch) {
+      try { suggestedName = decodeURIComponent(starMatch[1]); } catch (e) {}
+    }
+    if (!suggestedName) {
+      const plainMatch = contentDisposition.match(/filename="([^"]+)"/i);
+      if (plainMatch) suggestedName = plainMatch[1];
+    }
+    if (!suggestedName) suggestedName = 'youtube_' + Date.now() + '.' + format;
     const blob = await res.blob();
     await saveOutputFile(blob, suggestedName, format);
     ytProgressLabel.textContent = 'Готово!';
