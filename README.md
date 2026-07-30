@@ -1,6 +1,8 @@
 <div align="center">
 
-# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup>
+[🇷🇺 Русский](#russian) · [🇬🇧 English](#english-version)
+
+<h1 id="russian"><img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718</sup></h1>
 
 **Локальные медиа-инструменты в браузере.**  
 Всё работает на вашем компьютере — файлы никуда не отправляются.
@@ -35,15 +37,15 @@
 
 <div align="center">
 
-**Главная**
+**`📌 Главная`**
 
 ![Главный экран](https://i.ibb.co/pvPqH70v/image.png)
 
-**Видео редактор**
+**`📌 Видео редактор`**
 
 ![Обрезка видео](https://i.ibb.co/Z1mrpFtc/image.png)
 
-**Скачивание с YouTube**
+**`📌 Скачивание с YouTube`**
 
 ![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
 
@@ -54,7 +56,7 @@
 ### 🪟 Готовый .exe (Windows)
 1. Скачайте `MTools.exe` из [релизов](https://github.com/Kotecy/MFast-Video-Editor-in-browser/releases)
 2. Запустите — откроется браузер с приложением (`http://localhost:8000`)
-3. Ничего устанавливать не нужно — внутри Python, yt-dlp, ffmpeg.wasm и ffmpeg
+3. Ничего устанавливать не нужно — внутри Python, yt-dlp и ffmpeg.wasm
 4. Закройте вкладку — сервер остановится сам. Либо нажмите **«Выключить сервер»**
 
 ### 🐍 Из исходников (Python)
@@ -72,7 +74,7 @@ pip install yt-dlp PyInstaller
 pyinstaller build.spec
 ```
 
-Исполняемый файл — `dist/MTools.exe`. В сборку входят `ffmpeg.exe` (для yt-dlp) и `vendor/` (ffmpeg.wasm).
+Исполняемый файл — `dist/MTools.exe`. В сборку входит `vendor/` (ffmpeg.wasm).
 
 ## 📁 Структура проекта
 ```
@@ -80,20 +82,20 @@ MTools/
 ├── server.py          # HTTP-сервер: YouTube API, heartbeat, статика
 ├── index.html         # SPA-фронтенд (vanilla JS, ~1750 строк)
 ├── build.spec         # Конфиг PyInstaller
-├── mt.ico             # Иконка
 ├── vendor/
-│   └── ffmpeg/        # ffmpeg.wasm (обрезка в браузере)
+│   ├── ffmpeg/        # ffmpeg.wasm (обрезка в браузере)
+│   └── mt.ico         # Иконка приложения
 ├── dist/
 │   └── MTools.exe     # Собранный exe
-└── ffmpeg.exe         # Нативный ffmpeg для yt-dlp
+└── README.md
 ```
 
 ## 🛠 Технологии
 | Слой | Технология |
 |------|-----------|
-| **Бэкенд** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp, ffmpeg |
+| **Бэкенд** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp |
 | **Фронтенд** | Vanilla JS, ffmpeg.wasm, Web Audio API (форма волны) |
-| **Сборка** | PyInstaller (no-console, single-file .exe, ~160 МБ) |
+| **Сборка** | PyInstaller (no-console, single-file .exe, ~50 МБ) |
 | **Дизайн** | Тёмная тема, Space Grotesk + Inter, кастомный CSS |
 
 ## 🌐 API endpoints
@@ -126,7 +128,10 @@ MIT
 
 ---
 
-<br>
+# <span id="english-version">🇬🇧 English version</span>
+
+<details>
+<summary><strong>English version</strong></summary>
 
 <div align="center">
 
@@ -165,15 +170,15 @@ Everything runs on your machine — no files are sent anywhere.
 
 <div align="center">
 
-**Home**
+**`📌 Home`**
 
 ![Home](https://i.ibb.co/pvPqH70v/image.png)
 
-**Video Editor**
+**`📌 Video Editor`**
 
 ![Video Editor](https://i.ibb.co/Z1mrpFtc/image.png)
 
-**YouTube Downloader**
+**`📌 YouTube Downloader`**
 
 ![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
 
@@ -184,7 +189,7 @@ Everything runs on your machine — no files are sent anywhere.
 ### 🪟 Pre-built .exe (Windows)
 1. Download `MTools.exe` from [releases](https://github.com/your-username/your-repo/releases)
 2. Run it — a browser tab opens (`http://localhost:8000`)
-3. No setup needed — bundles Python, yt-dlp, ffmpeg.wasm and ffmpeg
+3. No setup needed — bundles Python, yt-dlp and ffmpeg.wasm
 4. Close the tab — server stops automatically. Or press **"Shutdown server"**
 
 ### 🐍 From source (Python)
@@ -202,7 +207,7 @@ pip install yt-dlp PyInstaller
 pyinstaller build.spec
 ```
 
-Output: `dist/MTools.exe`. Bundles `ffmpeg.exe` (for yt-dlp) and `vendor/` (ffmpeg.wasm).
+Output: `dist/MTools.exe`. Bundles `vendor/` (ffmpeg.wasm).
 
 ## 📁 Project Structure
 ```
@@ -210,20 +215,20 @@ MTools/
 ├── server.py          # HTTP server: YouTube API, heartbeat, static files
 ├── index.html         # SPA frontend (vanilla JS, ~1750 lines)
 ├── build.spec         # PyInstaller config
-├── mt.ico             # App icon
 ├── vendor/
-│   └── ffmpeg/        # ffmpeg.wasm (in-browser trimming)
+│   ├── ffmpeg/        # ffmpeg.wasm (in-browser trimming)
+│   └── mt.ico         # App icon
 ├── dist/
 │   └── MTools.exe     # Compiled executable
-└── ffmpeg.exe         # Native ffmpeg for yt-dlp
+└── README.md
 ```
 
 ## 🛠 Tech Stack
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp, ffmpeg |
+| **Backend** | Python 3, `http.server` + `ThreadingMixIn`, yt-dlp |
 | **Frontend** | Vanilla JS, ffmpeg.wasm, Web Audio API (waveform) |
-| **Packaging** | PyInstaller (no-console, single-file .exe, ~160 MB) |
+| **Packaging** | PyInstaller (no-console, single-file .exe, ~50 MB) |
 | **Design** | Dark theme, Space Grotesk + Inter, custom CSS |
 
 ## 🌐 API Endpoints
@@ -253,3 +258,4 @@ Star :star: this repo if you find it useful.
 
 ## ⚖️ License
 MIT
+</details>
