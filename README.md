@@ -23,15 +23,11 @@
 - Файл передаётся в браузер через HTTP и сохраняется через диалог скачивания
 - Таймаут 10 минут, поддержка не-ASCII (кириллица) в именах файлов (RFC 5987)
 
-### ❤️ Heartbeat-автовыключение
-- Приложение само завершится через 15 секунд бездействия (если страница открыта — heartbeat продлевает жизнь)
-- Можно выключить вручную кнопкой "Выключить сервер"
-
 ## Скриншоты
 
-![Главный экран](https://via.placeholder.com/800x450/0D0E12/6EE7D1?text=MTools+Home)
-![Обрезка видео](https://via.placeholder.com/800x450/171A21/E8E6E1?text=Trimmer)
-![YouTube Download](https://via.placeholder.com/800x450/171A21/F47174?text=YouTube+Download)
+![Главный экран](https://i.ibb.co/pvPqH70v/image.png)
+![Обрезка видео](https://i.ibb.co/Z1mrpFtc/image.png)
+![YouTube Download](https://i.ibb.co/99b6XmjM/image.png)
 
 ## Установка
 
@@ -39,6 +35,7 @@
 1. Скачайте `MTools.exe` из [релизов](https://github.com/ваш-username/ваш-репозиторий/releases)
 2. Запустите — откроется браузер с приложением (`http://localhost:8000`)
 3. Ничего устанавливать не нужно (внутри Python, yt-dlp, ffmpeg.wasm и ffmpeg)
+4. Закройте вкладку — сервер остановится сам. Можно выключить вручную кнопкой "Выключить сервер"
 
 ### Из исходников (Python)
 ```bash
