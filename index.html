@@ -870,7 +870,7 @@ button{ font-family:inherit; cursor:pointer; }
     </section>
   </section>
 
-  <div class="version">V0.718</div>
+  <div class="version">V0.718B</div>
 
   <!-- ========== YOUTUBE PAGE ========== -->
   <section id="page-youtube" class="page">
@@ -938,7 +938,9 @@ button{ font-family:inherit; cursor:pointer; }
 <div class="quality-row">
             <label for="ytQuality">Качество</label>
             <select id="ytQuality">
-              <option value="1080p">1080p</option>
+              <option value="2160p">4K (2160p)</option>
+              <option value="1440p">1440p</option>
+              <option value="1080p" selected>1080p</option>
               <option value="720p">720p</option>
               <option value="480p">480p</option>
               <option value="360p">360p</option>
@@ -967,12 +969,6 @@ button{ font-family:inherit; cursor:pointer; }
         <div class="progress-track"><div id="ytProgressBar"></div></div>
         <span id="ytProgressLabel">Подготовка…</span>
       </div>
-      <iframe id="ytDownloadFrame" name="ytDownloadFrame" style="display:none"></iframe>
-      <form id="ytDownloadForm" method="POST" action="/api/youtube/download" target="ytDownloadFrame" style="display:none">
-        <input type="hidden" name="url" value="">
-        <input type="hidden" name="format" value="">
-        <input type="hidden" name="quality" value="">
-      </form>
     </div>
   </section>
 </div>
@@ -1442,21 +1438,36 @@ function getMime(ext){
   return { mp4:'video/mp4', webm:'video/webm', mp3:'audio/mpeg', wav:'audio/wav' }[ext] || 'application/octet-stream';
 }
 
-async function saveOutputFile(blob, suggestedName, ext){
-  if ('showSaveFilePicker' in window){
+// Ask the user where to save BEFORE doing any slow async work (network
+// download, ffmpeg encode, etc). showSaveFilePicker() requires a *fresh*
+// user gesture — if too much time passes first, the browser silently
+// refuses it, which used to make "Скачать"/"Экспорт" appear to do nothing
+// on the rare occasion the operation took a while. Requesting the handle
+// immediately (in direct response to the click) avoids that entirely.
+async function pickSaveLocation(suggestedName, ext){
+  if (!('showSaveFilePicker' in window)) return { handle: null, cancelled: false };
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName,
+      types: [{ description: 'Медиафайл', accept: { [getMime(ext)]: ['.' + ext] } }]
+    });
+    return { handle, cancelled: false };
+  } catch (err) {
+    if (err.name === 'AbortError') return { handle: null, cancelled: true };
+    return { handle: null, cancelled: false }; // API unavailable/blocked — fall back later
+  }
+}
+
+async function saveOutputFile(blob, suggestedName, handle){
+  if (handle) {
     try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName,
-        types: [{ description:'Обрезанный медиафайл', accept:{ [getMime(ext)]:['.'+ext] } }]
-      });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       logMsg('Файл сохранён в выбранное расположение.');
       return;
-    } catch (err){
-      if (err.name === 'AbortError'){ logMsg('Сохранение отменено.'); return; }
-      logMsg('Диалог выбора папки недоступен, скачиваем обычным способом…');
+    } catch (err) {
+      logMsg('Не удалось записать в выбранное расположение, скачиваем обычным способом…');
     }
   }
   const url = URL.createObjectURL(blob);
@@ -1469,11 +1480,16 @@ async function saveOutputFile(blob, suggestedName, ext){
 
 exportBtn.addEventListener('click', async () => {
   if (!currentFile) return;
+  const ext = getExt(currentFile.name).replace('.', '');
+  const suggestedName = 'mtools_' + currentFile.name;
+  // Ask where to save right away, while the click's user-gesture is fresh —
+  // everything below (ffmpeg.wasm encode) can take a while.
+  const { handle, cancelled } = await pickSaveLocation(suggestedName, ext);
+  if (cancelled) return;
   exportBtn.disabled = true;
   progressWrap.hidden = false;
   progressBar.style.width = '0%';
   progressLabel.textContent = 'Готовим ffmpeg.wasm…';
-  const ext = getExt(currentFile.name).replace('.', '');
   const inputName = 'input.' + ext;
   const outputName = 'output.' + ext;
   try {
@@ -1498,7 +1514,7 @@ exportBtn.addEventListener('click', async () => {
     const outData = await ffmpeg.readFile(outputName);
     if (!outData || outData.length === 0) throw new Error('ffmpeg вернул пустой файл — обрезка не удалась.');
     const blob = new Blob([outData.buffer], { type: getMime(ext) });
-    await saveOutputFile(blob, 'mtools_' + currentFile.name, ext);
+    await saveOutputFile(blob, suggestedName, handle);
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
     progressLabel.textContent = 'Готово!';
@@ -1605,11 +1621,19 @@ ytDownloadBtn.addEventListener('click', async () => {
   const format = document.querySelector('input[name="ytFormat"]:checked').value;
   const quality = format === 'mp3' ? ytBitrate.value : ytQuality.value;
   ytError.textContent = '';
+
+  // Ask where to save RIGHT NOW, before any network work — the actual
+  // download+conversion can take a long time, and showSaveFilePicker()
+  // needs a fresh user gesture (see pickSaveLocation above).
+  const safeTitle = (ytVideoData.title || 'video').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'video';
+  const fallbackName = `${safeTitle}.${format}`;
+  const { handle, cancelled } = await pickSaveLocation(fallbackName, format);
+  if (cancelled) return;
+
   ytDownloadBtn.disabled = true;
   ytProgressWrap.hidden = false;
   ytProgressBar.style.width = '0%';
   ytProgressLabel.textContent = 'Запускаем скачивание…';
-  let cancelled = false;
   try {
     // 1. Start the job — returns immediately with a job id.
     const startRes = await fetch('/api/youtube/download/start', {
@@ -1630,7 +1654,6 @@ ytDownloadBtn.addEventListener('click', async () => {
     let jobData = null;
     while (true) {
       if (Date.now() - startedAt > MAX_WAIT_MS) {
-        cancelled = true;
         throw new Error('Превышено время ожидания (10 мин). Попробуйте другое качество.');
       }
       await sleep(500);
@@ -1678,9 +1701,9 @@ ytDownloadBtn.addEventListener('click', async () => {
       const plainMatch = contentDisposition.match(/filename="([^"]+)"/i);
       if (plainMatch) suggestedName = plainMatch[1];
     }
-    if (!suggestedName) suggestedName = 'youtube_' + Date.now() + '.' + format;
+    if (!suggestedName) suggestedName = fallbackName;
     const blob = await fileRes.blob();
-    await saveOutputFile(blob, suggestedName, format);
+    await saveOutputFile(blob, suggestedName, handle);
     ytProgressLabel.textContent = 'Готово!';
   } catch (err) {
     ytError.textContent = err.message;
@@ -1715,13 +1738,17 @@ setInterval(() => {
 }, 300000);
 
 /* =========================================================================
-   SHUTDOWN — heartbeat-based (reload безопасен, закрытие вкладки → выход)
+   SHUTDOWN — triggered only by the tab actually closing, not idle time.
+   pagehide fires on real close, reload, AND navigation-away — the server
+   waits SHUTDOWN_GRACE_SECONDS before exiting, and this same page's next
+   load (e.g. after a reload) cancels that pending shutdown immediately.
    ========================================================================= */
-function sendHeartbeat(){
-  fetch('/api/heartbeat', { keepalive: true }).catch(() => {});
-}
-sendHeartbeat();
-setInterval(sendHeartbeat, 5000);
+// Cancel any shutdown a previous pagehide may have scheduled (covers reload).
+fetch('/api/cancel-shutdown', { method: 'POST', keepalive: true }).catch(() => {});
+
+window.addEventListener('pagehide', () => {
+  navigator.sendBeacon('/api/tab-closing');
+});
 
 /* =========================================================================
    SPACEBAR PLAYBACK + CLICK TO PLAY

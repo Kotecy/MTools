@@ -56,29 +56,32 @@ def log_error(context, exc):
 if getattr(sys, 'frozen', False):
     BASE_DIR = Path(sys._MEIPASS)
     bundled_ffmpeg = BASE_DIR / "ffmpeg.exe"
-    # Debug: check if ffmpeg exists in _MEIPASS
-    import os
     debug_log = BASE_DIR.parent / "mtools_debug.log"
-    with open(debug_log, "a", encoding="utf-8") as f:
-        f.write(f"[DEBUG] BASE_DIR: {BASE_DIR}\n")
-        f.write(f"[DEBUG] bundled_ffmpeg: {bundled_ffmpeg}\n")
-        f.write(f"[DEBUG] exists: {bundled_ffmpeg.exists()}\n")
+    debug_lines = [
+        f"[DEBUG] BASE_DIR: {BASE_DIR}",
+        f"[DEBUG] bundled_ffmpeg: {bundled_ffmpeg}",
+        f"[DEBUG] exists: {bundled_ffmpeg.exists()}",
+    ]
     if not bundled_ffmpeg.exists():
-        # Try alternative locations
         alt_paths = [
             BASE_DIR / "ffmpeg",
             BASE_DIR.parent / "ffmpeg.exe",
             Path(sys.executable).parent / "ffmpeg.exe",
         ]
         for p in alt_paths:
-            with open(debug_log, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] checking alt: {p} -> {p.exists()}\n")
+            debug_lines.append(f"[DEBUG] checking alt: {p} -> {p.exists()}")
             if p.exists():
                 bundled_ffmpeg = p
                 break
     FFMPEG_PATH = str(bundled_ffmpeg) if bundled_ffmpeg.exists() else None
-    with open(debug_log, "a", encoding="utf-8") as f:
-        f.write(f"[DEBUG] FFMPEG_PATH: {FFMPEG_PATH}\n")
+    debug_lines.append(f"[DEBUG] FFMPEG_PATH: {FFMPEG_PATH}")
+    # Overwrite (not append) each run — this log only exists to diagnose
+    # ffmpeg-path detection on startup, so it doesn't need to grow forever.
+    try:
+        with open(debug_log, "w", encoding="utf-8") as f:
+            f.write("\n".join(debug_lines) + "\n")
+    except OSError:
+        pass
     if FFMPEG_PATH:
         os.environ['PATH'] = str(BASE_DIR) + os.pathsep + os.environ.get('PATH', '')
 else:
@@ -88,6 +91,7 @@ else:
 # Redirect stderr to avoid crashes in no-console mode
 if not sys.stderr:
     sys.stderr = open(os.devnull, 'w')
+
 
 # ── Find free port ─────────────────────────────────────────────
 def find_free_port(start=8000):
@@ -155,12 +159,14 @@ def build_ydl_opts(fmt, quality, outtmpl, progress_hooks=None, postprocessor_hoo
     else:
         quality_map = {
             "best": "bestvideo+bestaudio/best",
+            "2160p": "bestvideo[height<=2160]+bestaudio/best[height<=2160]",
+            "1440p": "bestvideo[height<=1440]+bestaudio/best[height<=1440]",
             "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
             "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
             "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
             "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
         }
-        format_spec = quality_map.get(quality, "bestvideo+bestaudio/best")
+        format_spec = quality_map.get(quality, "bestvideo[height<=1080]+bestaudio/best[height<=1080]")
         postprocessors = []
         merge = "mp4"
         ext = "mp4"
@@ -173,6 +179,13 @@ def build_ydl_opts(fmt, quality, outtmpl, progress_hooks=None, postprocessor_hoo
         "postprocessors": postprocessors,
         "merge_output_format": merge,
         "ffmpeg_location": FFMPEG_PATH,
+        # Large/4K downloads are split into many fragments; a transient
+        # network hiccup on any single fragment used to bubble up as a
+        # hard failure ("Got error: timed out"). Give yt-dlp room to
+        # retry instead of giving up immediately.
+        "socket_timeout": 30,
+        "retries": 20,
+        "fragment_retries": 20,
     }
     if progress_hooks:
         opts["progress_hooks"] = progress_hooks
@@ -320,8 +333,13 @@ def send_all(wfile, data):
 
 # ── HTTP Handler ───────────────────────────────────────────────
 HTTPD_INSTANCE = [None]
-HEARTBEAT_TIMER = [None]
-SHUTDOWN_DELAY = 15  # seconds without heartbeat before shutdown
+SHUTDOWN_TIMER = [None]
+SHUTDOWN_TIMER_LOCK = threading.Lock()
+# How long to wait after the tab reports "closing" before actually exiting.
+# A page reload also triggers the same "closing" signal (via pagehide), so
+# this grace period exists purely to let a reload's fresh page cancel the
+# pending shutdown before it fires — it is NOT an idle/inactivity timeout.
+SHUTDOWN_GRACE_SECONDS = 10
 
 class APIHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -335,22 +353,20 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/youtube/info":
             self._handle_youtube_info(parsed)
-        elif parsed.path == "/api/youtube/download":
-            self._handle_youtube_download_get(parsed)
         elif parsed.path == "/api/youtube/progress":
             self._handle_youtube_progress(parsed)
         elif parsed.path == "/api/youtube/download/file":
             self._handle_youtube_download_file(parsed)
-        elif parsed.path == "/api/heartbeat":
-            self._handle_heartbeat()
         else:
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/youtube/download":
-            self._handle_youtube_download()
-        elif self.path == "/api/youtube/download/start":
+        if self.path == "/api/youtube/download/start":
             self._handle_youtube_download_start()
+        elif self.path == "/api/tab-closing":
+            self._handle_tab_closing()
+        elif self.path == "/api/cancel-shutdown":
+            self._handle_cancel_shutdown()
         elif self.path == "/api/shutdown":
             self._handle_shutdown()
         else:
@@ -378,7 +394,10 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             from yt_dlp import YoutubeDL
-            ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": False, "noplaylist": True}
+            ydl_opts = {
+                "quiet": True, "no_warnings": True, "extract_flat": False,
+                "noplaylist": True, "socket_timeout": 30, "retries": 20,
+            }
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             data = {
@@ -396,123 +415,6 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             log_error("_handle_youtube_info", e)
             self._send_json({"error": str(e)}, 500)
-
-    # ── YouTube Download ───────────────────────────────────────
-    def _handle_youtube_download(self):
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode("utf-8")
-            ctype = self.headers.get("Content-Type", "")
-            if "application/json" in ctype:
-                data = json.loads(body)
-            else:
-                data = urllib.parse.parse_qs(body)
-                data = {k: v[0] if isinstance(v, list) else v for k, v in data.items()}
-        except Exception:
-            self._send_json({"error": "Invalid request"}, 400)
-            return
-        url = data.get("url")
-        fmt = data.get("format", "mp4")
-        quality = data.get("quality", "best")
-        if not url:
-            self._send_json({"error": "Parameter url is required"}, 400)
-            return
-        tmp_dir = tempfile.mkdtemp(prefix="mtools_yt_")
-        try:
-            from yt_dlp import YoutubeDL
-            if fmt == "mp3":
-                format_spec = "bestaudio/best"
-                postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
-                outtmpl = os.path.join(tmp_dir, "%(title)s.%(ext)s")
-            else:
-                quality_map = {
-                    "best": "bestvideo+bestaudio/best",
-                    "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-                    "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
-                    "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-                    "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
-                }
-                format_spec = quality_map.get(quality, "bestvideo+bestaudio/best")
-                postprocessors = []
-                outtmpl = os.path.join(tmp_dir, "%(title)s.%(ext)s")
-            ydl_opts = {
-                "format": format_spec,
-                "outtmpl": outtmpl,
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-                "postprocessors": postprocessors,
-                "merge_output_format": "mp4" if fmt == "mp4" else None,
-                "ffmpeg_location": FFMPEG_PATH,
-            }
-            with YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                title = info.get("title", "video")
-            ext = "mp3" if fmt == "mp3" else "mp4"
-            files = list(Path(tmp_dir).iterdir())
-            # Pick the LARGEST file with the right extension, not just the
-            # first one found — if postprocessing left extra small sidecar
-            # files around (or a merge partially failed), grabbing "the
-            # first match" can pick a tiny stray file instead of the real
-            # media, which is a likely cause of near-instant, tiny,
-            # mismatched downloads.
-            candidates = [f for f in files if f.suffix == f".{ext}"]
-            if candidates:
-                downloaded = max(candidates, key=lambda f: f.stat().st_size)
-            else:
-                downloaded = max(files, key=lambda f: f.stat().st_size) if files else None
-            if not downloaded or not downloaded.exists():
-                self._send_json({"error": "Downloaded file not found"}, 500)
-                return
-            file_size = wait_for_stable_file(downloaded)
-            safe_title = re.sub(r'[^\w\-_\. ]', '_', title)
-            suggested_name = f"{safe_title}.{ext}"
-            headers_sent = False
-            try:
-                self.send_response(200)
-                self.send_header("Content-Type", {
-                    "mp4": "video/mp4", "mp3": "audio/mpeg",
-                }.get(ext, "application/octet-stream"))
-                self.send_header("Content-Length", str(file_size))
-                self.send_header("Content-Disposition", content_disposition_value(suggested_name))
-                self.end_headers()
-                headers_sent = True
-                BUFSIZE = 65536
-                sent = 0
-                with open(downloaded, "rb") as f:
-                    while sent < file_size:
-                        chunk = f.read(min(BUFSIZE, file_size - sent))
-                        if not chunk:
-                            break
-                        send_all(self.wfile, chunk)
-                        sent += len(chunk)
-            except Exception as e:
-                # If headers (with a promised Content-Length) already went
-                # out, we CANNOT send a fresh JSON error on the same
-                # connection without corrupting the response the browser
-                # is mid-way through reading — that's exactly what used to
-                # cause a garbled net::ERR_CONTENT_LENGTH_MISMATCH. Instead
-                # log the real cause and let the connection drop; the
-                # browser will just report the failed download.
-                log_error("_handle_youtube_download (streaming file)", e)
-                if not headers_sent:
-                    self._send_json({"error": str(e)}, 500)
-                return
-            finally:
-                for f in Path(tmp_dir).iterdir():
-                    try: f.unlink()
-                    except: pass
-                try: os.rmdir(tmp_dir)
-                except: pass
-        except ImportError:
-            self._send_json({"error": "yt-dlp not installed"}, 500)
-        except Exception as e:
-            log_error("_handle_youtube_download", e)
-            self._send_json({"error": str(e)}, 500)
-            try:
-                for f in Path(tmp_dir).iterdir(): f.unlink()
-                os.rmdir(tmp_dir)
-            except: pass
 
     # ── YouTube Download with progress (job-based) ─────────────
     def _handle_youtube_download_start(self):
@@ -608,120 +510,38 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 DOWNLOAD_JOBS.pop(job_id, None)
             cleanup_tmp_dir(job["tmp_dir"])
 
-    def _handle_heartbeat(self):
+    def _handle_tab_closing(self):
+        # Fired via navigator.sendBeacon on pagehide (real tab close,
+        # reload, or navigation-away). Schedule a shutdown after a short
+        # grace period rather than exiting immediately, so a reload's new
+        # page load (which arrives well under the grace period) can cancel
+        # it via /api/cancel-shutdown.
         self._send_json({"ok": True})
-        if HEARTBEAT_TIMER[0]:
-            HEARTBEAT_TIMER[0].cancel()
-        HEARTBEAT_TIMER[0] = threading.Timer(SHUTDOWN_DELAY, do_shutdown)
-        HEARTBEAT_TIMER[0].daemon = True
-        HEARTBEAT_TIMER[0].start()
+        with SHUTDOWN_TIMER_LOCK:
+            if SHUTDOWN_TIMER[0]:
+                SHUTDOWN_TIMER[0].cancel()
+            SHUTDOWN_TIMER[0] = threading.Timer(SHUTDOWN_GRACE_SECONDS, do_shutdown)
+            SHUTDOWN_TIMER[0].daemon = True
+            SHUTDOWN_TIMER[0].start()
 
-    def _handle_youtube_download_get(self, parsed):
-        params = urllib.parse.parse_qs(parsed.query)
-        url = params.get("url", [None])[0]
-        fmt = params.get("format", ["mp4"])[0]
-        quality = params.get("quality", ["best"])[0]
-        if not url:
-            self._send_json({"error": "Parameter url is required"}, 400)
-            return
-        tmp_dir = tempfile.mkdtemp(prefix="mtools_yt_")
-        try:
-            from yt_dlp import YoutubeDL
-            if fmt == "mp3":
-                format_spec = "bestaudio/best"
-                postprocessors = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
-                outtmpl = os.path.join(tmp_dir, "%(title)s.%(ext)s")
-                merge = None
-                ext = "mp3"
-            else:
-                quality_map = {
-                    "best": "bestvideo+bestaudio/best",
-                    "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-                    "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
-                    "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-                    "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]",
-                }
-                format_spec = quality_map.get(quality, "bestvideo+bestaudio/best")
-                postprocessors = []
-                outtmpl = os.path.join(tmp_dir, "%(title)s.%(ext)s")
-                merge = "mp4"
-                ext = "mp4"
-            ydl_opts = {
-                "format": format_spec,
-                "outtmpl": outtmpl,
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-                "postprocessors": postprocessors,
-                "merge_output_format": merge,
-                "ffmpeg_location": FFMPEG_PATH,
-            }
-            with YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                title = info.get("title", "video")
-            files = list(Path(tmp_dir).iterdir())
-            candidates = [f for f in files if f.suffix == f".{ext}"]
-            if candidates:
-                downloaded = max(candidates, key=lambda f: f.stat().st_size)
-            else:
-                downloaded = max(files, key=lambda f: f.stat().st_size) if files else None
-            if not downloaded or not downloaded.exists():
-                self._send_json({"error": "Downloaded file not found"}, 500)
-                return
-            file_size = wait_for_stable_file(downloaded)
-            safe_title = re.sub(r'[^\w\-_\. ]', '_', title)
-            suggested_name = f"{safe_title}.{ext}"
-            headers_sent = False
-            try:
-                self.send_response(200)
-                self.send_header("Content-Type", {
-                    "mp4": "video/mp4", "mp3": "audio/mpeg",
-                }.get(ext, "application/octet-stream"))
-                self.send_header("Content-Length", str(file_size))
-                self.send_header("Content-Disposition", content_disposition_value(suggested_name))
-                self.end_headers()
-                headers_sent = True
-                BUFSIZE = 65536
-                sent = 0
-                with open(downloaded, "rb") as f:
-                    while sent < file_size:
-                        chunk = f.read(min(BUFSIZE, file_size - sent))
-                        if not chunk:
-                            break
-                        send_all(self.wfile, chunk)
-                        sent += len(chunk)
-            except Exception as e:
-                log_error("_handle_youtube_download_get (streaming file)", e)
-                if not headers_sent:
-                    self._send_json({"error": str(e)}, 500)
-                return
-            finally:
-                for f in Path(tmp_dir).iterdir():
-                    try: f.unlink()
-                    except: pass
-                try: os.rmdir(tmp_dir)
-                except: pass
-        except ImportError:
-            try:
-                self.send_error(500, "yt-dlp not installed")
-            except: pass
-        except Exception as e:
-            log_error("_handle_youtube_download_get", e)
-            try:
-                self._send_json({"error": str(e)}, 500)
-            except: pass
-            try:
-                for f in Path(tmp_dir).iterdir(): f.unlink()
-                os.rmdir(tmp_dir)
-            except: pass
+    def _handle_cancel_shutdown(self):
+        # Called once at page load. If a shutdown was scheduled by a
+        # pagehide from the page being reloaded, cancel it — the app is
+        # still in use.
+        self._send_json({"ok": True})
+        with SHUTDOWN_TIMER_LOCK:
+            if SHUTDOWN_TIMER[0]:
+                SHUTDOWN_TIMER[0].cancel()
+                SHUTDOWN_TIMER[0] = None
 
     def _handle_shutdown(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
         self.wfile.write(b"shutdown")
-        if HEARTBEAT_TIMER[0]:
-            HEARTBEAT_TIMER[0].cancel()
+        with SHUTDOWN_TIMER_LOCK:
+            if SHUTDOWN_TIMER[0]:
+                SHUTDOWN_TIMER[0].cancel()
         threading.Thread(target=do_shutdown, daemon=True).start()
 
     def _send_json(self, data, status=200):
