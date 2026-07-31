@@ -18,10 +18,20 @@ import http.server
 import socketserver
 from socketserver import ThreadingMixIn
 import urllib.parse
+import urllib.request
 import webbrowser
 import threading
 import uuid
+import shutil
+import zipfile
+import hashlib
+import platform
 from pathlib import Path
+
+try:
+    from yt_dlp.utils import DownloadCancelled
+except ImportError:
+    DownloadCancelled = None
 
 # PyInstaller resource path
 if getattr(sys, 'frozen', False):
@@ -91,6 +101,87 @@ else:
 # Redirect stderr to avoid crashes in no-console mode
 if not sys.stderr:
     sys.stderr = open(os.devnull, 'w')
+
+
+# ── Optional YouTube cookies config ────────────────────────────
+# YouTube increasingly requires proof of "not a bot" for some videos, which
+# yt-dlp can usually satisfy either by trying a different internal player
+# client (no setup needed, tried automatically below) or, if that still
+# isn't enough, by using cookies from a real logged-in browser session.
+# Cookie use is opt-in only — we never read a browser's cookie store
+# unless the user explicitly asks for it here, since that's sensitive data.
+#
+# To enable: create "mtools_config.json" next to this file, e.g.:
+#   {"youtube_cookies_browser": "chrome"}          (chrome/edge/firefox/brave/opera/vivaldi)
+#   {"youtube_cookies_file": "C:\\path\\to\\cookies.txt"}   (exported via a browser extension)
+CONFIG_PATH = BASE_DIR / "mtools_config.json"
+
+def load_config():
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+def save_config(cfg):
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
+
+APP_CONFIG = load_config()
+
+# Where the auto-installer puts ffmpeg — a per-user folder that never
+# needs admin rights, independent of where MTools itself is installed.
+FFMPEG_INSTALL_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "MTools" / "ffmpeg"
+
+
+def detect_ffmpeg():
+    """Look for a usable ffmpeg in priority order: bundled in the frozen
+    EXE, previously auto-installed by us, then the system PATH."""
+    if FFMPEG_PATH and Path(FFMPEG_PATH).exists():
+        return FFMPEG_PATH
+    configured = APP_CONFIG.get("ffmpeg_path")
+    if configured and Path(configured).exists():
+        return configured
+    default_installed = FFMPEG_INSTALL_DIR / "ffmpeg.exe"
+    if default_installed.exists():
+        return str(default_installed)
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    return None
+
+FFMPEG_PATH = detect_ffmpeg()
+
+
+def apply_cookie_config(opts):
+    """Mutate ydl_opts in place with the user's opt-in cookie settings, if any."""
+    browser = APP_CONFIG.get("youtube_cookies_browser")
+    cookie_file = APP_CONFIG.get("youtube_cookies_file")
+    if browser:
+        opts["cookiesfrombrowser"] = (browser,)
+    elif cookie_file:
+        opts["cookiefile"] = cookie_file
+    return opts
+
+
+def friendly_youtube_error(exc):
+    """yt-dlp's raw 'Sign in to confirm you're not a bot' traceback is not
+    actionable for an end user. Translate it into plain guidance."""
+    msg = str(exc)
+    if "Sign in to confirm" in msg or "not a bot" in msg:
+        return (
+            "YouTube запросил подтверждение «не бот» для этого видео. "
+            "Что можно сделать: 1) обновите yt-dlp командой "
+            "\"pip install -U yt-dlp\" (YouTube часто меняет защиту, и это "
+            "обычно самый эффективный способ); 2) если не помогло, настройте "
+            "куки — создайте файл mtools_config.json рядом с server.py с "
+            "содержимым {\"youtube_cookies_browser\": \"chrome\"} (укажите "
+            "браузер, где вы залогинены в YouTube) и перезапустите сервер."
+        )
+    return msg
 
 
 # ── Find free port ─────────────────────────────────────────────
@@ -187,11 +278,42 @@ def build_ydl_opts(fmt, quality, outtmpl, progress_hooks=None, postprocessor_hoo
         "retries": 20,
         "fragment_retries": 20,
     }
+    apply_cookie_config(opts)
     if progress_hooks:
         opts["progress_hooks"] = progress_hooks
     if postprocessor_hooks:
         opts["postprocessor_hooks"] = postprocessor_hooks
     return opts, ext
+
+
+# ── YouTube "Sign in to confirm you're not a bot" fallback ────
+# The default (web) client has the fullest, most accurate format list —
+# including all resolutions up to 4K — so we always try it first. Only if
+# it specifically hits YouTube's bot-check do we retry with the
+# android/tv clients, which dodge that check but report a much smaller
+# set of formats (often capped around 360p). Forcing android/tv for
+# every video would silently hide real available resolutions, so this
+# is a fallback, not a default.
+BOT_CHECK_CLIENT_FALLBACK = ["android", "tv"]
+
+def extract_info_with_fallback(url, ydl_opts, download):
+    from yt_dlp import YoutubeDL
+    client_attempts = [None, BOT_CHECK_CLIENT_FALLBACK]
+    last_exc = None
+    for clients in client_attempts:
+        opts = dict(ydl_opts)
+        if clients:
+            opts["extractor_args"] = {"youtube": {"player_client": clients}}
+        try:
+            with YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=download)
+        except Exception as e:
+            last_exc = e
+            msg = str(e)
+            if "Sign in to confirm" not in msg and "not a bot" not in msg:
+                raise  # a different failure — don't mask it, surface immediately
+            continue  # bot-check hit — retry with the fallback client(s)
+    raise last_exc
 
 
 def cleanup_tmp_dir(tmp_dir):
@@ -203,6 +325,158 @@ def cleanup_tmp_dir(tmp_dir):
     except: pass
 
 
+# ── FFmpeg auto-installer ───────────────────────────────────────
+# yt-dlp needs a real ffmpeg binary (not the in-browser ffmpeg.wasm used by
+# the trimmer) to merge video+audio or extract MP3. If it's missing, offer
+# to fetch a Windows build from the official ShareX/FFmpeg GitHub
+# releases and install it to a per-user folder that needs no admin
+# rights. We always ask GitHub for the *latest* release rather than
+# hardcoding a version/filename, since new releases get published there
+# over time.
+FFMPEG_RELEASE_API = "https://api.github.com/repos/ShareX/FFmpeg/releases/latest"
+FFMPEG_RELEASES_PAGE = "https://github.com/ShareX/FFmpeg/releases"
+
+INSTALL_JOBS = {}
+INSTALL_JOBS_LOCK = threading.Lock()
+
+
+def _github_get_json(url):
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "MTools", "Accept": "application/vnd.github+json"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def find_ffmpeg_release_asset():
+    release = _github_get_json(FFMPEG_RELEASE_API)
+    assets = release.get("assets", [])
+    is_64bit = platform.architecture()[0] == "64bit"
+    tag_order = ["win64", "win32"] if is_64bit else ["win32", "win64"]
+    chosen = None
+    for tag in tag_order:
+        for a in assets:
+            name = (a.get("name") or "").lower()
+            if tag in name and name.endswith(".zip"):
+                chosen = a
+                break
+        if chosen:
+            break
+    if not chosen:
+        raise RuntimeError(
+            "Не удалось найти подходящий архив FFmpeg для Windows в последнем "
+            f"релизе ({FFMPEG_RELEASES_PAGE}). Установите вручную."
+        )
+    # Best-effort: the release notes sometimes list a "File / SHA256" table
+    # as plain text. If we can find a 64-char hex string right after this
+    # asset's filename, use it to verify the download; if not, just skip
+    # verification rather than failing the whole install over it.
+    sha256 = None
+    body = release.get("body") or ""
+    m = re.search(re.escape(chosen["name"]) + r"[^\n]{0,80}?([a-fA-F0-9]{64})", body)
+    if m:
+        sha256 = m.group(1).lower()
+    return {
+        "download_url": chosen["browser_download_url"],
+        "name": chosen["name"],
+        "size": chosen.get("size"),
+        "sha256": sha256,
+        "release_tag": release.get("tag_name"),
+    }
+
+
+def run_ffmpeg_install_job(job_id):
+    with INSTALL_JOBS_LOCK:
+        INSTALL_JOBS[job_id] = {
+            "status": "starting", "downloaded": 0, "total": None,
+            "percent": 0, "error": None, "path": None,
+        }
+    zip_path = None
+    try:
+        asset = find_ffmpeg_release_asset()
+        with INSTALL_JOBS_LOCK:
+            job = INSTALL_JOBS.get(job_id)
+            if job:
+                job["status"] = "downloading"
+                job["total"] = asset.get("size")
+
+        FFMPEG_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        zip_path = FFMPEG_INSTALL_DIR / asset["name"]
+        req = urllib.request.Request(asset["download_url"], headers={"User-Agent": "MTools"})
+        hasher = hashlib.sha256()
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            total = int(resp.headers.get("Content-Length") or asset.get("size") or 0) or None
+            downloaded = 0
+            with open(zip_path, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    hasher.update(chunk)
+                    downloaded += len(chunk)
+                    with INSTALL_JOBS_LOCK:
+                        job = INSTALL_JOBS.get(job_id)
+                        if not job:
+                            return  # job was dismissed/cancelled client-side
+                        job["downloaded"] = downloaded
+                        job["total"] = total
+                        job["percent"] = round(downloaded / total * 100, 1) if total else None
+
+        if asset["sha256"] and hasher.hexdigest().lower() != asset["sha256"]:
+            raise RuntimeError(
+                "Контрольная сумма скачанного файла не совпала — похоже, "
+                "файл повреждён при загрузке. Попробуйте ещё раз."
+            )
+
+        with INSTALL_JOBS_LOCK:
+            job = INSTALL_JOBS.get(job_id)
+            if job:
+                job["status"] = "extracting"
+
+        with zipfile.ZipFile(zip_path) as zf:
+            wanted = ("ffmpeg.exe", "ffprobe.exe")
+            extracted_any = False
+            for member in zf.namelist():
+                base = Path(member).name.lower()
+                if base in wanted:
+                    with zf.open(member) as src, open(FFMPEG_INSTALL_DIR / base, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    extracted_any = True
+        if not extracted_any:
+            raise RuntimeError("В скачанном архиве не нашлось ffmpeg.exe")
+
+        ffmpeg_exe = FFMPEG_INSTALL_DIR / "ffmpeg.exe"
+        if not ffmpeg_exe.exists():
+            raise RuntimeError("Распаковка прошла, но ffmpeg.exe не появился на диске")
+
+        global FFMPEG_PATH
+        FFMPEG_PATH = str(ffmpeg_exe)
+        cfg = load_config()
+        cfg["ffmpeg_path"] = str(ffmpeg_exe)
+        save_config(cfg)
+        global APP_CONFIG
+        APP_CONFIG = cfg
+
+        with INSTALL_JOBS_LOCK:
+            job = INSTALL_JOBS.get(job_id)
+            if job:
+                job["status"] = "finished"
+                job["percent"] = 100
+                job["path"] = str(ffmpeg_exe)
+    except Exception as e:
+        log_error("run_ffmpeg_install_job", e)
+        with INSTALL_JOBS_LOCK:
+            job = INSTALL_JOBS.get(job_id)
+            if job:
+                job["status"] = "error"
+                job["error"] = str(e)
+    finally:
+        if zip_path:
+            try: zip_path.unlink()
+            except OSError: pass
+
+
 def run_download_job(job_id, url, fmt, quality):
     tmp_dir = tempfile.mkdtemp(prefix="mtools_yt_")
     with DOWNLOAD_JOBS_LOCK:
@@ -210,13 +484,19 @@ def run_download_job(job_id, url, fmt, quality):
             "status": "starting", "downloaded": 0, "total": None, "percent": 0,
             "speed": None, "eta": None, "error": None, "tmp_dir": tmp_dir,
             "file_path": None, "filename": None, "ext": None,
+            "cancel_requested": False,
         }
+
+    def check_cancel(job):
+        if job.get("cancel_requested"):
+            raise DownloadCancelled("Cancelled by user")
 
     def progress_hook(d):
         with DOWNLOAD_JOBS_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if not job:
                 return
+            check_cancel(job)
             if d.get("status") == "downloading":
                 downloaded = d.get("downloaded_bytes") or 0
                 total = d.get("total_bytes") or d.get("total_bytes_estimate")
@@ -232,7 +512,10 @@ def run_download_job(job_id, url, fmt, quality):
     def pp_hook(d):
         with DOWNLOAD_JOBS_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
-            if job and d.get("status") == "started":
+            if not job:
+                return
+            check_cancel(job)
+            if d.get("status") == "started":
                 job["status"] = "processing"
 
     try:
@@ -241,10 +524,8 @@ def run_download_job(job_id, url, fmt, quality):
             fmt, quality, outtmpl,
             progress_hooks=[progress_hook], postprocessor_hooks=[pp_hook],
         )
-        from yt_dlp import YoutubeDL
-        with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            title = info.get("title", "video")
+        info = extract_info_with_fallback(url, ydl_opts, download=True)
+        title = info.get("title", "video")
         files = list(Path(tmp_dir).iterdir())
         candidates = [f for f in files if f.suffix == f".{ext}"]
         downloaded_file = (
@@ -259,6 +540,8 @@ def run_download_job(job_id, url, fmt, quality):
         with DOWNLOAD_JOBS_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
+                if job.get("cancel_requested"):
+                    raise DownloadCancelled("Cancelled by user")
                 job.update({
                     "status": "finished", "percent": 100,
                     "file_path": downloaded_file, "filename": suggested_name,
@@ -272,12 +555,20 @@ def run_download_job(job_id, url, fmt, quality):
                 job["error"] = "yt-dlp not installed"
         cleanup_tmp_dir(tmp_dir)
     except Exception as e:
+        if DownloadCancelled is not None and isinstance(e, DownloadCancelled):
+            with DOWNLOAD_JOBS_LOCK:
+                job = DOWNLOAD_JOBS.get(job_id)
+                if job:
+                    job["status"] = "cancelled"
+                DOWNLOAD_JOBS.pop(job_id, None)
+            cleanup_tmp_dir(tmp_dir)
+            return
         log_error("run_download_job", e)
         with DOWNLOAD_JOBS_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
                 job["status"] = "error"
-                job["error"] = str(e)
+                job["error"] = friendly_youtube_error(e)
         cleanup_tmp_dir(tmp_dir)
 
 
@@ -357,12 +648,20 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_youtube_progress(parsed)
         elif parsed.path == "/api/youtube/download/file":
             self._handle_youtube_download_file(parsed)
+        elif parsed.path == "/api/ffmpeg/status":
+            self._handle_ffmpeg_status()
+        elif parsed.path == "/api/ffmpeg/install/progress":
+            self._handle_ffmpeg_install_progress(parsed)
         else:
             super().do_GET()
 
     def do_POST(self):
         if self.path == "/api/youtube/download/start":
             self._handle_youtube_download_start()
+        elif self.path == "/api/youtube/download/cancel":
+            self._handle_youtube_download_cancel()
+        elif self.path == "/api/ffmpeg/install/start":
+            self._handle_ffmpeg_install_start()
         elif self.path == "/api/tab-closing":
             self._handle_tab_closing()
         elif self.path == "/api/cancel-shutdown":
@@ -393,13 +692,32 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"error": "Parameter url is required"}, 400)
             return
         try:
-            from yt_dlp import YoutubeDL
             ydl_opts = {
                 "quiet": True, "no_warnings": True, "extract_flat": False,
                 "noplaylist": True, "socket_timeout": 30, "retries": 20,
             }
-            with YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+            apply_cookie_config(ydl_opts)
+            info = extract_info_with_fallback(url, ydl_opts, download=False)
+            formats = info.get("formats") or []
+            heights = [
+                f.get("height") for f in formats
+                if f.get("height") and f.get("vcodec") not in (None, "none")
+            ]
+            max_height = max(heights) if heights else None
+            quality_tiers = [("2160p", 2160), ("1440p", 1440), ("1080p", 1080),
+                              ("720p", 720), ("480p", 480), ("360p", 360)]
+            if max_height:
+                # Only offer resolutions this video actually has — a
+                # tier "available" if the video has something at or
+                # above it (yt-dlp/ffmpeg will just use the closest
+                # match under the requested cap, same as normal).
+                available_qualities = [q for q, h in quality_tiers if max_height >= h]
+                if not available_qualities:
+                    available_qualities = ["360p"]
+            else:
+                # Couldn't determine resolution (e.g. unusual format
+                # list) — don't hide anything, safer default.
+                available_qualities = [q for q, _ in quality_tiers]
             data = {
                 "title": info.get("title", "\u2014"),
                 "channel": info.get("channel", info.get("uploader", "\u2014")),
@@ -408,13 +726,15 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "views": format_views(info.get("view_count")),
                 "thumbnail": info.get("thumbnail", ""),
                 "webpage_url": info.get("webpage_url", url),
+                "max_height": max_height,
+                "available_qualities": available_qualities,
             }
             self._send_json(data)
         except ImportError:
             self._send_json({"error": "yt-dlp not installed"}, 500)
         except Exception as e:
             log_error("_handle_youtube_info", e)
-            self._send_json({"error": str(e)}, 500)
+            self._send_json({"error": friendly_youtube_error(e)}, 500)
 
     # ── YouTube Download with progress (job-based) ─────────────
     def _handle_youtube_download_start(self):
@@ -441,6 +761,30 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             target=run_download_job, args=(job_id, url, fmt, quality), daemon=True,
         ).start()
         self._send_json({"job_id": job_id})
+
+    def _handle_youtube_download_cancel(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            data = json.loads(body) if body else {}
+        except Exception:
+            data = {}
+        job_id = data.get("job_id")
+        tmp_dir_to_clean = None
+        with DOWNLOAD_JOBS_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job["cancel_requested"] = True
+                # If the file was already fully downloaded by the time the
+                # cancel arrived, the download thread has no more hook
+                # calls left to catch it — honor the cancel here instead.
+                if job["status"] == "finished":
+                    job["status"] = "cancelled"
+                    tmp_dir_to_clean = job["tmp_dir"]
+                    DOWNLOAD_JOBS.pop(job_id, None)
+        if tmp_dir_to_clean:
+            cleanup_tmp_dir(tmp_dir_to_clean)
+        self._send_json({"ok": True})
 
     def _handle_youtube_progress(self, parsed):
         params = urllib.parse.parse_qs(parsed.query)
@@ -473,6 +817,11 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             with DOWNLOAD_JOBS_LOCK:
                 DOWNLOAD_JOBS.pop(job_id, None)
             cleanup_tmp_dir(job["tmp_dir"])
+            return
+        if job["status"] == "cancelled":
+            self._send_json({"error": "Download was cancelled"}, 410)
+            with DOWNLOAD_JOBS_LOCK:
+                DOWNLOAD_JOBS.pop(job_id, None)
             return
         if job["status"] != "finished":
             self._send_json({"error": "Not ready yet"}, 409)
@@ -509,6 +858,37 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             with DOWNLOAD_JOBS_LOCK:
                 DOWNLOAD_JOBS.pop(job_id, None)
             cleanup_tmp_dir(job["tmp_dir"])
+
+    # ── FFmpeg auto-installer ───────────────────────────────────
+    def _handle_ffmpeg_status(self):
+        self._send_json({
+            "available": bool(FFMPEG_PATH),
+            "path": FFMPEG_PATH,
+        })
+
+    def _handle_ffmpeg_install_start(self):
+        job_id = uuid.uuid4().hex
+        threading.Thread(
+            target=run_ffmpeg_install_job, args=(job_id,), daemon=True,
+        ).start()
+        self._send_json({"job_id": job_id})
+
+    def _handle_ffmpeg_install_progress(self, parsed):
+        params = urllib.parse.parse_qs(parsed.query)
+        job_id = params.get("id", [None])[0]
+        with INSTALL_JOBS_LOCK:
+            job = INSTALL_JOBS.get(job_id)
+            if not job:
+                self._send_json({"error": "Unknown job"}, 404)
+                return
+            self._send_json({
+                "status": job["status"],
+                "downloaded": job["downloaded"],
+                "total": job["total"],
+                "percent": job["percent"],
+                "error": job["error"],
+                "path": job["path"],
+            })
 
     def _handle_tab_closing(self):
         # Fired via navigator.sendBeacon on pagehide (real tab close,

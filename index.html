@@ -691,8 +691,9 @@ button{ font-family:inherit; cursor:pointer; }
 }
 #ytProgressLabel{
   font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted);
-  display:block;
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+#ytCancelBtn{ flex: 0 0 auto; }
 
 /* ============================
    FOOTER ACTIONS
@@ -714,6 +715,56 @@ button{ font-family:inherit; cursor:pointer; }
 
 @media (prefers-reduced-motion: reduce){
   *{ transition:none !important; animation:none !important; }
+}
+.modal-overlay{
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-overlay[hidden]{ display: none; }
+.modal-box{
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  max-width: 480px; width: 100%; padding: 28px;
+}
+.modal-icon{
+  font-size: 28px; color: var(--range); margin-bottom: 8px;
+}
+.modal-box h2{
+  font-family: var(--font-display); font-size: 20px; margin-bottom: 12px;
+}
+.modal-box p{
+  color: var(--fg-muted); font-size: 14px; line-height: 1.5; margin-bottom: 12px;
+}
+.modal-note{
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px;
+}
+.modal-note b{ color: var(--fg); }
+.modal-error{
+  color: var(--danger); font-size: 13px; min-height: 0; margin-top: 4px;
+}
+.modal-actions{
+  display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;
+}
+.modal-actions .btn{ flex: 1 1 auto; }
+.modal-dismiss{
+  display: block; width: 100%; text-align: center; margin-top: 14px;
+  background: none; border: none; color: var(--fg-dim); font-size: 13px;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.modal-dismiss:hover{ color: var(--fg-muted); }
+#ffmpegModalProgress{ margin-top: 14px; }
+#ffmpegModalProgress[hidden]{ display: none; }
+#ffmpegModalProgressBar{
+  height:100%; width:0%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width .3s ease; border-radius: 4px;
+}
+#ffmpegModalProgressLabel{
+  font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted);
+  display: block; margin-top: 6px;
 }
 </style>
 </head>
@@ -870,7 +921,7 @@ button{ font-family:inherit; cursor:pointer; }
     </section>
   </section>
 
-  <div class="version">V0.718B</div>
+  <div class="version">V0.718C</div>
 
   <!-- ========== YOUTUBE PAGE ========== -->
   <section id="page-youtube" class="page">
@@ -967,10 +1018,41 @@ button{ font-family:inherit; cursor:pointer; }
 
       <div class="download-progress" id="ytProgressWrap" hidden>
         <div class="progress-track"><div id="ytProgressBar"></div></div>
-        <span id="ytProgressLabel">Подготовка…</span>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px;">
+          <span id="ytProgressLabel">Подготовка…</span>
+          <button class="btn danger btn-sm" id="ytCancelBtn" type="button">Отменить</button>
+        </div>
       </div>
     </div>
   </section>
+</div>
+
+<!-- FFmpeg missing modal -->
+<div class="modal-overlay" id="ffmpegModalOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-icon">⚠</div>
+    <h2>FFmpeg не найден</h2>
+    <p>
+      Для скачивания видео/аудио с YouTube (склейка видео+звука, извлечение MP3)
+      нужна программа <b>FFmpeg</b>, а на этом компьютере она не установлена.
+      Обрезка видео на главной странице работает независимо от неё и не пострадает.
+    </p>
+    <p class="modal-note">
+      Автоматическая установка скачает официальную сборку с GitHub-репозитория
+      <b>ShareX/FFmpeg</b> (github.com/ShareX/FFmpeg) и распакует её в вашу
+      пользовательскую папку — ничего больше на компьютере не меняется.
+    </p>
+    <div id="ffmpegModalProgress" hidden>
+      <div class="progress-track"><div id="ffmpegModalProgressBar"></div></div>
+      <span id="ffmpegModalProgressLabel">Подготовка…</span>
+    </div>
+    <div id="ffmpegModalError" class="modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn primary" id="ffmpegInstallAutoBtn" type="button">Установить автоматически</button>
+      <button class="btn secondary" id="ffmpegInstallManualBtn" type="button">Установить вручную</button>
+    </div>
+    <button class="modal-dismiss" id="ffmpegModalDismissBtn" type="button">Пропустить, я не буду качать с YouTube</button>
+  </div>
 </div>
 
 <script type="module">
@@ -984,6 +1066,7 @@ function resetYtState(){
   ytError.textContent = '';
   ytProgressWrap.hidden = true;
   ytDownloadBtn.disabled = false;
+  applyAvailableQualities(null);
 }
 function resetTrimmerState(){
   mediaEl.pause();
@@ -1547,6 +1630,16 @@ const ytDownloadBtn   = document.getElementById('ytDownloadBtn');
 const ytProgressWrap  = document.getElementById('ytProgressWrap');
 const ytProgressBar   = document.getElementById('ytProgressBar');
 const ytProgressLabel = document.getElementById('ytProgressLabel');
+const ytCancelBtn     = document.getElementById('ytCancelBtn');
+
+const ffmpegModalOverlay      = document.getElementById('ffmpegModalOverlay');
+const ffmpegModalProgress     = document.getElementById('ffmpegModalProgress');
+const ffmpegModalProgressBar  = document.getElementById('ffmpegModalProgressBar');
+const ffmpegModalProgressLabel= document.getElementById('ffmpegModalProgressLabel');
+const ffmpegModalError        = document.getElementById('ffmpegModalError');
+const ffmpegInstallAutoBtn    = document.getElementById('ffmpegInstallAutoBtn');
+const ffmpegInstallManualBtn  = document.getElementById('ffmpegInstallManualBtn');
+const ffmpegModalDismissBtn   = document.getElementById('ffmpegModalDismissBtn');
 const formatMp4       = document.getElementById('formatMp4');
 const formatMp3       = document.getElementById('formatMp3');
 
@@ -1566,6 +1659,47 @@ document.querySelectorAll('.format-option').forEach(el => {
     toggleQualityBitrate();
   });
 });
+
+// Only offer qualities the video actually has (e.g. hide 4K/1440p if the
+// source tops out lower) — picking one that doesn't exist would just
+// silently fall back to the closest match, which is confusing.
+//
+// Note: this rebuilds the <option> list from scratch rather than toggling
+// `hidden`/`disabled` on existing options. Those attributes are not
+// reliably honored by native OS-rendered <select> dropdowns (e.g. Chrome
+// on Windows still shows "disabled"/"hidden" options as normal, clickable
+// entries), so actually adding/removing the elements is the only approach
+// that works consistently across browsers.
+const YT_QUALITY_OPTIONS = [
+  { value: '2160p', label: '4K (2160p)' },
+  { value: '1440p', label: '1440p' },
+  { value: '1080p', label: '1080p' },
+  { value: '720p',  label: '720p' },
+  { value: '480p',  label: '480p' },
+  { value: '360p',  label: '360p' },
+];
+
+function applyAvailableQualities(availableQualities){
+  const prevSelected = ytQuality.value || '1080p';
+  const allowed = (availableQualities && availableQualities.length)
+    ? new Set(availableQualities)
+    : new Set(YT_QUALITY_OPTIONS.map(o => o.value)); // unknown -> show everything, don't guess wrong
+  ytQuality.innerHTML = '';
+  YT_QUALITY_OPTIONS.forEach(({ value, label }) => {
+    if (!allowed.has(value)) return;
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    ytQuality.appendChild(opt);
+  });
+  if (allowed.has(prevSelected)) {
+    ytQuality.value = prevSelected;
+  } else if (ytQuality.options.length) {
+    // Previously selected quality doesn't exist for this video — fall
+    // back to the highest one that does (list is ordered high→low).
+    ytQuality.selectedIndex = 0;
+  }
+}
 
 fetchInfoBtn.addEventListener('click', async () => {
   const url = ytUrlInput.value.trim();
@@ -1587,6 +1721,7 @@ fetchInfoBtn.addEventListener('click', async () => {
     ytChannel.textContent = data.channel;
     ytDuration.textContent = data.duration;
     ytViews.textContent = data.views;
+    applyAvailableQualities(data.available_qualities);
     videoInfo.hidden = false;
   } catch (err) {
     ytError.textContent = err.message;
@@ -1615,6 +1750,23 @@ function formatEta(seconds){
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
+let activeYtJobId = null;
+let ytDownloadCancelled = false;
+
+ytCancelBtn.addEventListener('click', async () => {
+  if (!activeYtJobId) return;
+  ytDownloadCancelled = true;
+  ytCancelBtn.disabled = true;
+  ytProgressLabel.textContent = 'Отменяем…';
+  try {
+    await fetch('/api/youtube/download/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: activeYtJobId }),
+    });
+  } catch (e) { /* best-effort — the polling loop will also stop locally */ }
+});
+
 ytDownloadBtn.addEventListener('click', async () => {
   if (!ytVideoData) { ytError.textContent = 'Сначала получите информацию о видео'; return; }
   const url = ytUrlInput.value.trim();
@@ -1630,10 +1782,14 @@ ytDownloadBtn.addEventListener('click', async () => {
   const { handle, cancelled } = await pickSaveLocation(fallbackName, format);
   if (cancelled) return;
 
+  ytDownloadCancelled = false;
+  activeYtJobId = null;
   ytDownloadBtn.disabled = true;
+  ytCancelBtn.disabled = false;
   ytProgressWrap.hidden = false;
   ytProgressBar.style.width = '0%';
   ytProgressLabel.textContent = 'Запускаем скачивание…';
+  let wasCancelled = false;
   try {
     // 1. Start the job — returns immediately with a job id.
     const startRes = await fetch('/api/youtube/download/start', {
@@ -1647,16 +1803,19 @@ ytDownloadBtn.addEventListener('click', async () => {
       throw new Error(errMsg);
     }
     const { job_id } = await startRes.json();
+    activeYtJobId = job_id;
 
-    // 2. Poll progress until it finishes or errors, updating the bar for real.
+    // 2. Poll progress until it finishes, errors, or gets cancelled.
     const startedAt = Date.now();
     const MAX_WAIT_MS = 10 * 60 * 1000; // 10 min safety net
     let jobData = null;
     while (true) {
+      if (ytDownloadCancelled) { wasCancelled = true; break; }
       if (Date.now() - startedAt > MAX_WAIT_MS) {
         throw new Error('Превышено время ожидания (10 мин). Попробуйте другое качество.');
       }
       await sleep(500);
+      if (ytDownloadCancelled) { wasCancelled = true; break; }
       const progRes = await fetch('/api/youtube/progress?id=' + encodeURIComponent(job_id));
       if (!progRes.ok) continue; // transient hiccup, keep polling
       jobData = await progRes.json();
@@ -1678,10 +1837,18 @@ ytDownloadBtn.addEventListener('click', async () => {
         ytProgressBar.style.width = '100%';
         ytProgressLabel.textContent = 'Скачано, сохраняем файл…';
         break;
+      } else if (jobData.status === 'cancelled') {
+        wasCancelled = true;
+        break;
       } else if (jobData.status === 'error') {
         throw new Error(jobData.error || 'Ошибка скачивания');
       }
       // status === 'starting' → keep waiting, bar stays at 0%
+    }
+
+    if (wasCancelled) {
+      ytProgressLabel.textContent = 'Скачивание отменено.';
+      return;
     }
 
     // 3. Job finished — fetch the actual file and save it.
@@ -1709,6 +1876,7 @@ ytDownloadBtn.addEventListener('click', async () => {
     ytError.textContent = err.message;
     ytProgressLabel.textContent = 'Ошибка';
   } finally {
+    activeYtJobId = null;
     ytDownloadBtn.disabled = false;
     setTimeout(() => { ytProgressWrap.hidden = true; }, 1500);
   }
@@ -1774,6 +1942,93 @@ mediaEl.addEventListener('click', () => {
   if (mediaEl.paused) { mediaEl.play(); isPlayingRange = false; }
   else mediaEl.pause();
 });
+
+/* =========================================================================
+   FFMPEG AUTO-INSTALLER — checked once on startup. Needed only for
+   YouTube downloads (merging video+audio, extracting MP3); the trimmer
+   uses ffmpeg.wasm in-browser and is unaffected either way.
+   ========================================================================= */
+function formatFfmpegBytes(bytes){
+  if (bytes == null) return '?';
+  if (bytes >= 1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' МБ';
+  if (bytes >= 1024) return (bytes/1024).toFixed(0) + ' КБ';
+  return bytes + ' Б';
+}
+
+async function checkFfmpegOnStartup(){
+  try {
+    const res = await fetch('/api/ffmpeg/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.available) ffmpegModalOverlay.hidden = false;
+  } catch (e) { /* server not reachable yet — skip silently */ }
+}
+
+ffmpegModalDismissBtn.addEventListener('click', () => {
+  ffmpegModalOverlay.hidden = true;
+});
+
+ffmpegInstallManualBtn.addEventListener('click', () => {
+  window.open('https://github.com/ShareX/FFmpeg/releases', '_blank');
+});
+
+ffmpegInstallAutoBtn.addEventListener('click', async () => {
+  ffmpegModalError.textContent = '';
+  ffmpegInstallAutoBtn.disabled = true;
+  ffmpegInstallManualBtn.disabled = true;
+  ffmpegModalDismissBtn.hidden = true;
+  ffmpegModalProgress.hidden = false;
+  ffmpegModalProgressBar.style.width = '0%';
+  ffmpegModalProgressLabel.textContent = 'Запускаем установку…';
+  try {
+    const startRes = await fetch('/api/ffmpeg/install/start', { method: 'POST' });
+    if (!startRes.ok) throw new Error('Не удалось запустить установку');
+    const { job_id } = await startRes.json();
+
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 5 * 60 * 1000; // 5 min safety net
+    while (true) {
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        throw new Error('Превышено время ожидания установки.');
+      }
+      await sleep(500);
+      const progRes = await fetch('/api/ffmpeg/install/progress?id=' + encodeURIComponent(job_id));
+      if (!progRes.ok) continue;
+      const jobData = await progRes.json();
+      if (jobData.status === 'downloading') {
+        const pct = jobData.percent;
+        if (pct != null) {
+          ffmpegModalProgressBar.style.width = pct + '%';
+          ffmpegModalProgressLabel.textContent =
+            `Скачивание: ${pct.toFixed(0)}% (${formatFfmpegBytes(jobData.downloaded)} / ${formatFfmpegBytes(jobData.total)})`;
+        } else {
+          ffmpegModalProgressBar.style.width = '50%';
+          ffmpegModalProgressLabel.textContent = `Скачивание: ${formatFfmpegBytes(jobData.downloaded)}`;
+        }
+      } else if (jobData.status === 'extracting') {
+        ffmpegModalProgressBar.style.width = '95%';
+        ffmpegModalProgressLabel.textContent = 'Распаковка…';
+      } else if (jobData.status === 'finished') {
+        ffmpegModalProgressBar.style.width = '100%';
+        ffmpegModalProgressLabel.textContent = 'Готово! FFmpeg установлен.';
+        setTimeout(() => { ffmpegModalOverlay.hidden = true; }, 1200);
+        break;
+      } else if (jobData.status === 'error') {
+        throw new Error(jobData.error || 'Ошибка установки');
+      }
+      // status === 'starting' → keep waiting
+    }
+  } catch (err) {
+    ffmpegModalError.textContent = err.message;
+    ffmpegModalProgressLabel.textContent = 'Ошибка установки';
+  } finally {
+    ffmpegInstallAutoBtn.disabled = false;
+    ffmpegInstallManualBtn.disabled = false;
+    ffmpegModalDismissBtn.hidden = false;
+  }
+});
+
+checkFfmpegOnStartup();
 
 // Initial route
 const initialHash = location.hash.replace('#', '') || 'home';
