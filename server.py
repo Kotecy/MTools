@@ -348,24 +348,45 @@ def _github_get_json(url):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _score_ffmpeg_asset(name, want_arm):
+    name = name.lower()
+    if not name.endswith(".zip"):
+        return -1
+    if any(bad in name for bad in ("macos", "darwin", "linux", "-mac")):
+        return -1  # this repo is Windows-only, but be defensive anyway
+    has_arm = "arm64" in name or "aarch64" in name
+    has_x64 = "x64" in name or "amd64" in name or "win64" in name
+    has_x86 = ("x86" in name or "i686" in name or "win32" in name) and not has_x64 and not has_arm
+    is_win_labeled = "win" in name or "windows" in name
+    bonus = 5 if is_win_labeled else 0  # prefer explicitly-labeled builds when available
+    if want_arm:
+        if has_arm:
+            return bonus + 10
+        if has_x64:
+            return bonus + 3  # x64 builds still run on arm64 Windows via emulation
+        return -1
+    if has_x64:
+        return bonus + 10
+    if has_x86:
+        return bonus + 5
+    return -1
+
+
 def find_ffmpeg_release_asset():
     release = _github_get_json(FFMPEG_RELEASE_API)
     assets = release.get("assets", [])
-    is_64bit = platform.architecture()[0] == "64bit"
-    tag_order = ["win64", "win32"] if is_64bit else ["win32", "win64"]
-    chosen = None
-    for tag in tag_order:
-        for a in assets:
-            name = (a.get("name") or "").lower()
-            if tag in name and name.endswith(".zip"):
-                chosen = a
-                break
-        if chosen:
-            break
+    machine = platform.machine().lower()
+    want_arm = "arm" in machine or "aarch64" in machine
+    scored = [(_score_ffmpeg_asset(a.get("name") or "", want_arm), a) for a in assets]
+    scored = [t for t in scored if t[0] > 0]
+    scored.sort(key=lambda t: t[0], reverse=True)
+    chosen = scored[0][1] if scored else None
     if not chosen:
+        available = ", ".join(a.get("name", "?") for a in assets) or "нет файлов вообще"
         raise RuntimeError(
             "Не удалось найти подходящий архив FFmpeg для Windows в последнем "
-            f"релизе ({FFMPEG_RELEASES_PAGE}). Установите вручную."
+            f"релизе ({FFMPEG_RELEASES_PAGE}). Доступные файлы в релизе: {available}. "
+            "Установите вручную."
         )
     # Best-effort: the release notes sometimes list a "File / SHA256" table
     # as plain text. If we can find a 64-char hex string right after this
