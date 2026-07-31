@@ -166,7 +166,7 @@ MIT
 
 <div align="center">
 
-# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718E</sup> <img src="https://cdn-icons-png.flaticon.com/128/686/686589.png" height=28 />
+# <img src="https://cdn-icons-png.flaticon.com/128/2921/2921222.png" height=28 /> MTools <sup>V0.718E</sup>
 
 **Local media tools in your browser.**  
 Trim video and audio, grab clips from YouTube — everything runs on your machine, no files are sent anywhere.
