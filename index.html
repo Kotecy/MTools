@@ -37,6 +37,14 @@
   --font-mono:    'JetBrains Mono', 'IBM Plex Mono', 'Courier New', monospace;
 }
 *{ box-sizing:border-box; margin:0; padding:0; }
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{
+  background: var(--border-light);
+  border-radius:8px; border:2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover{ background: var(--fg-muted); }
+::-webkit-scrollbar-corner{ background:transparent; }
 body{
   background: var(--bg);
   color: var(--fg);
@@ -82,6 +90,55 @@ button{ font-family:inherit; cursor:pointer; }
 }
 .nav-back:hover{ border-color: var(--accent); color: var(--fg); background: var(--bg-card-hover); }
 .nav-back svg{ width: 16px; height: 16px; }
+
+.nav-right{ display:flex; align-items:center; gap:10px; }
+.lang-toggle{
+  width:36px; height:36px; padding:0;
+  background: var(--bg-card); border:1px solid var(--border);
+  border-radius:50%; color:var(--fg-muted);
+  font-family:inherit; font-size:11px; font-weight:700; letter-spacing:.02em;
+  cursor:pointer; transition: var(--transition);
+}
+.lang-toggle:hover{ border-color:var(--accent); color:var(--fg); background:var(--bg-card-hover); }
+.settings-wrap{ position:relative; }
+.nav-gear{
+  width:36px; height:36px; border-radius:50%;
+  background: var(--bg-card); border:1px solid var(--border);
+  color:var(--fg-muted); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition: var(--transition);
+}
+.nav-gear:hover{ border-color:var(--accent); color:var(--fg); background:var(--bg-card-hover); }
+.nav-gear svg{ width:17px; height:17px; }
+.settings-pop{
+  position:absolute; right:0; top:44px; z-index:50;
+  width:300px; background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-md); padding:16px;
+  display:flex; flex-direction:column; gap:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+}
+.settings-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-size:13px; color:var(--fg);
+}
+.settings-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-size:13px; color:var(--fg); line-height:1.45;
+}
+.switch{ position:relative; display:inline-block; flex-shrink:0; }
+.switch input{ position:absolute; opacity:0; width:0; height:0; }
+.switch-track{
+  display:block; width:40px; height:22px; border-radius:11px;
+  background:var(--bg-elevated); border:1px solid var(--border);
+  transition:var(--transition); cursor:pointer;
+}
+.switch-knob{
+  position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+  background:var(--fg-muted); transition:var(--transition);
+}
+.switch input:checked + .switch-track{ background:var(--accent); border-color:var(--accent); }
+.switch input:checked + .switch-track .switch-knob{ left:20px; background:var(--bg); }
+.switch input:focus-visible + .switch-track{ outline:2px solid var(--accent); outline-offset:2px; }
 
 /* ============================
    PAGE TRANSITIONS
@@ -161,6 +218,8 @@ button{ font-family:inherit; cursor:pointer; }
 }
 .feature-card .icon.scissors{ background: rgba(110,231,209,.12); color: var(--accent); }
 .feature-card .icon.youtube{ background: rgba(244,113,116,.12); color: var(--danger); }
+.feature-card .icon.image{ background: rgba(167,139,250,.12); color: #A78BFA; }
+.feature-card .icon.edit{ background: rgba(251,191,36,.12); color: #FBBF24; }
 .feature-card .icon svg{ width: 26px; height: 26px; }
 
 .feature-card h3{
@@ -170,20 +229,8 @@ button{ font-family:inherit; cursor:pointer; }
 }
 .feature-card p{
   color: var(--fg-muted); font-size: 14px; line-height: 1.55;
-  margin-bottom: 20px;
-}
-.feature-card .tag{
-  display:inline-flex; align-items:center; gap: 6px;
-  font-size: 12px; font-weight: 600;
-  padding: 6px 14px; border-radius: 50px;
-  background: var(--bg-elevated); border: 1px solid var(--border);
-  color: var(--fg-muted);
-  transition: var(--transition);
-}
-.feature-card:hover .tag{
-  background: var(--accent); color: var(--bg); border-color: var(--accent);
-}
-.feature-card .tag svg{ width: 14px; height: 14px; }
+   margin-bottom: 20px;
+ }
 
 /* ============================
    SECTION HEADERS
@@ -198,6 +245,7 @@ button{ font-family:inherit; cursor:pointer; }
   flex-shrink:0;
 }
 .section-header .icon.purple{ background: rgba(167,139,250,.12); color: #A78BFA; }
+.section-header .icon.amber{ background: rgba(251,191,36,.12); color: #FBBF24; }
 .section-header .icon.teal{ background: rgba(110,231,209,.12); color: var(--accent); }
 .section-header .icon svg{ width: 20px; height: 20px; }
 .section-header h2{
@@ -243,6 +291,287 @@ button{ font-family:inherit; cursor:pointer; }
   font-size: 13px; margin: 0 0 20px;
 }
 #fileInput{ display:none; }
+
+/* ============================
+   GIF MAKER
+   ============================ */
+#gifDropzone{
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 40px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  transition: var(--transition);
+  cursor: pointer;
+}
+#gifDropzone.drag-over{
+  border-color: var(--accent);
+  background: rgba(110,231,209,.04);
+  box-shadow: inset 0 0 30px var(--accent-glow);
+}
+#gifDropzone .upload-icon{
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  margin: 0 auto 16px; color: var(--fg-muted);
+  transition: var(--transition);
+}
+#gifDropzone.drag-over .upload-icon{ background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+#gifDropzone .upload-icon svg{ width: 22px; height: 22px; }
+#gifDropzone p.big{
+  font-family: var(--font-display);
+  font-size: 17px; margin: 0 0 6px;
+}
+#gifDropzone p.small{
+  color: var(--fg-muted);
+  font-size: 13px; margin: 0 0 20px;
+}
+#gifFileInput{ display:none; }
+#gifWorkspace .conv-preview-stage{ height:62vh; min-height:380px; overflow:hidden; }
+#gifPreviewVideo, #gifResultImg, #gifAnimImg{
+  max-width:100%; max-height:100%;
+  border-radius:6px; box-shadow:0 10px 34px rgba(0,0,0,.45);
+}
+.gif-select{
+  width:100%; background: var(--bg-elevated); color: var(--fg);
+  border:1px solid var(--border); border-radius:10px;
+  padding:8px 12px; font-size:14px; cursor:pointer;
+}
+.conv-rot-label{ margin-left:auto; font-family:var(--font-mono); font-size:13px; color:var(--fg-muted); }
+.conv-layout{
+  display:grid; grid-template-columns: 1fr 300px; gap:16px; align-items:start;
+}
+@media (max-width: 900px){ .conv-layout{ grid-template-columns:1fr; } }
+.conv-main{ min-width:0; }
+.conv-preview-stage{
+  display:flex; align-items:center; justify-content:center;
+  min-height:380px; max-height:62vh;
+  padding:20px; overflow:auto;
+  background-color: var(--bg-card);
+  border:1px solid var(--border); border-radius: var(--radius-lg);
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.035) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.035) 75%),
+    linear-gradient(45deg, rgba(255,255,255,.035) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.035) 75%);
+  background-size:24px 24px; background-position:0 0, 12px 12px;
+}
+.conv-preview-stage img{
+  max-width:100%; max-height:56vh; object-fit:contain;
+  border-radius:6px; box-shadow:0 10px 34px rgba(0,0,0,.45);
+}
+.conv-preview-bar{
+  display:flex; align-items:center; gap:12px;
+  margin-top:12px; font-family:var(--font-mono); font-size:12px; color:var(--fg-muted);
+}
+.conv-preview-name{ font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.conv-preview-info{ white-space:nowrap; }
+.conv-thumbs{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.conv-thumb{
+  position:relative; width:64px; height:64px; border-radius:10px; overflow:hidden;
+  border:2px solid var(--border); cursor:pointer; padding:0; background:var(--bg-elevated);
+  transition: var(--transition);
+}
+.conv-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.conv-thumb:hover{ border-color: var(--border-light); }
+.conv-thumb.active{ border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.conv-thumb .b{
+  position:absolute; width:18px; height:18px;
+  border:none; border-radius:6px; background:rgba(0,0,0,.65); color:#fff;
+  font-size:10px; line-height:1; cursor:pointer; display:none;
+  align-items:center; justify-content:center; padding:0;
+}
+.conv-thumb:hover .b{ display:flex; }
+.conv-thumb .b:hover{ background:var(--accent); }
+.conv-thumb .b.bl{ left:2px; top:2px; }
+.conv-thumb .b.br{ right:2px; top:2px; }
+.conv-thumb .b.bb{ right:2px; bottom:2px; }
+.conv-thumb .b.bb:hover{ background:var(--danger); }
+.conv-thumb .gif-num{
+  position:absolute; left:4px; top:4px; min-width:16px; height:16px;
+  padding:0 4px; border-radius:8px; background:rgba(0,0,0,.65); color:#fff;
+  font-size:10px; line-height:16px; text-align:center; font-family:var(--font-mono);
+  pointer-events:none;
+}
+.conv-files-actions{ display:flex; gap:8px; margin-top:12px; }
+.conv-panel{
+  position:sticky; top:16px;
+  background: var(--bg-card); border:1px solid var(--border);
+  border-radius: var(--radius-lg); padding:20px;
+  display:flex; flex-direction:column; gap:18px;
+  max-height: calc(100vh - 32px); overflow:auto;
+}
+/* Editor: the panel sits BELOW the preview; sections are switched by tabs */
+#page-editor .conv-layout{ display:block; }
+#page-editor .conv-panel{
+  position:static; max-height:none; overflow:visible; margin-top:16px;
+}
+.ed-tabs{ display:flex; flex-wrap:wrap; gap:6px; }
+.ed-tabs button{
+  border:1px solid var(--border); background:var(--bg-elevated); color:var(--fg-muted);
+  font-family:inherit; font-size:13px; font-weight:600;
+  padding:8px 16px; border-radius:10px; cursor:pointer;
+  transition:var(--transition); white-space:nowrap;
+}
+.ed-tabs button:hover{ color:var(--fg); border-color:var(--border-light); }
+.ed-tabs button.active{ background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.ed-tab-body{ display:flex; flex-direction:column; gap:18px; }
+.ed-tab-body[hidden]{ display:none !important; }
+input[type=color]{
+  -webkit-appearance:none; appearance:none;
+  background:var(--bg-elevated); border:1px solid var(--border);
+  border-radius:10px; padding:4px; cursor:pointer;
+}
+input[type=color]::-webkit-color-swatch-wrapper{ padding:0; }
+input[type=color]::-webkit-color-swatch{ border:none; border-radius:6px; }
+input[type=color]::-moz-color-swatch{ border:none; border-radius:6px; }
+#edTextColorPresets{ display:flex; flex-wrap:wrap; gap:6px; }
+#edTextColorPresets button{
+  width:26px; height:26px; padding:0; border-radius:8px;
+  border:1px solid var(--border); cursor:pointer;
+  transition:var(--transition);
+}
+#edTextColorPresets button:hover{ transform:scale(1.1); border-color:var(--fg); }
+.conv-panel-title{ font-family:var(--font-display); font-weight:600; font-size:15px; }
+.conv-group{ display:flex; flex-direction:column; gap:8px; }
+.conv-label{ font-size:12px; color:var(--fg-muted); font-weight:600; letter-spacing:.02em; }
+.seg{
+  display:flex; gap:3px; padding:3px;
+  background: var(--bg-elevated); border:1px solid var(--border); border-radius:12px;
+}
+.seg button{
+  flex:1; border:none; background:transparent; color:var(--fg-muted);
+  font-weight:600; font-size:13px; padding:8px 0; border-radius:9px;
+  cursor:pointer; transition: var(--transition);
+}
+.seg button:hover{ color:var(--fg); }
+.seg button.active{ background: var(--accent); color: var(--bg); }
+#edQualityWrap[hidden], #edCropActions[hidden], #gifProgressWrap[hidden]{ display:none !important; }
+.ed-check{
+  display:flex; gap:8px; align-items:center;
+  font-size:13px; color:var(--fg); cursor:pointer;
+}
+.ed-check input{ accent-color: var(--accent); width:16px; height:16px; }
+button.tool{
+  width:38px; height:38px; border-radius:10px;
+  border:1px solid var(--border); background:var(--bg-elevated); color:var(--fg);
+  font-size:16px; cursor:pointer; transition: var(--transition);
+  display:flex; align-items:center; justify-content:center;
+}
+button.tool:hover{ border-color:var(--accent-dim); color:var(--accent); }
+button.tool.toggle.active{ background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.conv-convert{ width:100%; justify-content:center; }
+
+/* ============================
+   IMAGE EDITOR
+   ============================ */
+#edDropzone{
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 40px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  transition: var(--transition);
+  cursor: pointer;
+}
+#edDropzone.drag-over{
+  border-color: var(--accent);
+  background: rgba(110,231,209,.04);
+  box-shadow: inset 0 0 30px var(--accent-glow);
+}
+#edDropzone .upload-icon{
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  margin: 0 auto 16px; color: var(--fg-muted);
+  transition: var(--transition);
+}
+#edDropzone.drag-over .upload-icon{ background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+#edDropzone .upload-icon svg{ width: 22px; height: 22px; }
+#edDropzone p.big{
+  font-family: var(--font-display);
+  font-size: 17px; margin: 0 0 6px;
+}
+#edDropzone p.small{
+  color: var(--fg-muted);
+  font-size: 13px; margin: 0 0 20px;
+}
+#edFileInput{ display:none; }
+#edStage{ position:relative; overflow:hidden; height:62vh; min-height:380px; }
+#edCanvas{
+  max-width:100%; max-height:56vh; display:block;
+  border-radius:6px; box-shadow:0 10px 34px rgba(0,0,0,.45);
+  will-change: transform;
+}
+#edStage.ed-zoomed{ cursor:grab; }
+#edStage.ed-zoomed #edCanvas{ cursor:grab; }
+#edStage.ed-zoomed.ed-panning,
+#edStage.ed-zoomed.ed-panning #edCanvas{ cursor:grabbing; }
+.ed-zoom{
+  position:absolute; right:10px; bottom:10px; z-index:3;
+  display:flex; align-items:center; gap:2px;
+  background:rgba(0,0,0,.55); border:1px solid var(--border);
+  border-radius:10px; padding:2px;
+}
+.ed-zoom span{
+  min-width:46px; text-align:center;
+  font-family:var(--font-mono); font-size:12px; color:var(--fg);
+}
+.ed-zoom button{
+  width:26px; height:26px; border:none; border-radius:8px;
+  background:transparent; color:var(--fg-muted); cursor:pointer;
+  font-size:14px; display:flex; align-items:center; justify-content:center;
+  transition:var(--transition);
+}
+.ed-zoom button:hover{ color:var(--fg); background:rgba(255,255,255,.08); }
+#edCropOverlay{
+  position:absolute; cursor:crosshair; touch-action:none; z-index:2;
+}
+#edCropRect{
+  position:absolute; border:1.5px solid var(--accent);
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+  cursor:move; display:none;
+}
+.ed-handle{
+  position:absolute; width:12px; height:12px;
+  background:var(--accent); border:2px solid var(--bg); border-radius:4px;
+}
+.ed-handle[data-h="nw"]{ left:-7px; top:-7px; cursor:nwse-resize; }
+.ed-handle[data-h="ne"]{ right:-7px; top:-7px; cursor:nesw-resize; }
+.ed-handle[data-h="sw"]{ left:-7px; bottom:-7px; cursor:nesw-resize; }
+.ed-handle[data-h="se"]{ right:-7px; bottom:-7px; cursor:nwse-resize; }
+.ed-toolbar{ margin-left:auto; display:flex; gap:8px; flex-shrink:0; }
+.ed-crop-actions{
+  display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:10px;
+  font-family:var(--font-mono); font-size:12px; color:var(--fg-muted);
+}
+.ed-aspect{ margin-left:auto; }
+.ed-presets{ display:flex; flex-wrap:wrap; gap:6px; }
+.ed-presets button{
+  border:1px solid var(--border); background:transparent; color:var(--fg-muted);
+  font-size:12px; font-weight:600; padding:6px 12px; border-radius:50px;
+  cursor:pointer; transition:var(--transition);
+}
+.ed-presets button:hover{ color:var(--fg); border-color:var(--border-light); }
+.ed-presets button.active{ background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.ed-slider-head{
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-size:12px; color:var(--fg-muted); font-weight:600;
+}
+.ed-slider-head span:last-child{
+  font-family:var(--font-mono); color:var(--fg); font-weight:600;
+}
+.ed-panel-section{
+  border-top:1px solid var(--border); padding-top:16px;
+  display:flex; flex-direction:column; gap:18px; margin-top:2px;
+}
+.ed-crop-hint{ margin-left:auto; white-space:nowrap; }
+button.tool:focus-visible,
+.seg button:focus-visible,
+.ed-presets button:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px;
+}
+input[type=range]:focus-visible{
+  outline:2px solid var(--accent); outline-offset:3px; border-radius:4px;
+}
 
 /* ============================
    BUTTONS
@@ -766,6 +1095,17 @@ button{ font-family:inherit; cursor:pointer; }
   font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted);
   display: block; margin-top: 6px;
 }
+#ytdlpModalProgress{ margin-top: 14px; }
+#ytdlpModalProgress[hidden]{ display: none; }
+#ytdlpModalProgressBar{
+  height:100%; width:0%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width .3s ease; border-radius: 4px;
+}
+#ytdlpModalProgressLabel{
+  font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted);
+  display: block; margin-top: 6px;
+}
 </style>
 </head>
 <body>
@@ -777,16 +1117,33 @@ button{ font-family:inherit; cursor:pointer; }
       <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l20 12L6 28V4z"/></svg>
       MTools<span>.</span>
     </a>
-    <button class="nav-back" id="navBack" hidden onclick="navigate('home')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
-      На главную
-    </button>
+    <div class="nav-right">
+      <button class="nav-back" id="navBack" hidden onclick="navigate('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
+        <span data-i18n="nav.home">На главную</span>
+      </button>
+      <button type="button" class="lang-toggle" id="langToggle" title="Switch language / Сменить язык">EN</button>
+      <div class="settings-wrap">
+        <button type="button" class="nav-gear" id="gearBtn" data-i18n-title="settings.title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="settings-pop" id="settingsPop" hidden>
+          <div class="settings-row">
+            <span data-i18n="settings.resetOnHome">Сбрасывать загруженное при переходе на главную</span>
+            <label class="switch">
+              <input type="checkbox" id="resetOnHomeChk" checked>
+              <span class="switch-track"><span class="switch-knob"></span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
   </nav>
 
   <!-- ========== HOME PAGE ========== -->
   <section id="page-home" class="page">
     <div class="hero">
-      <h1>MTools — медиа-инструменты<br>прямо в <span>браузере</span></h1>
+      <h1 data-i18n-html="home.hero">MTools — медиа-инструменты<br>прямо в <span>браузере</span></h1>
       <div class="hero-quote" id="heroQuote">«У меня нет таланта — у меня есть упрямство» © Джейсон Стэтхем</div>
     </div>
     <div class="home-cards">
@@ -794,15 +1151,29 @@ button{ font-family:inherit; cursor:pointer; }
         <div class="icon scissors">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
         </div>
-        <h3>Обрезка медиа</h3>
-        <p>Обрежьте видео или аудио. Быстрое копирование без потери качества или точное перекодирование.</p>
+        <h3 data-i18n="home.trim.title">Обрезка медиа</h3>
+        <p data-i18n="home.trim.desc">Обрежьте видео или аудио. Быстрое копирование без потери качества или точное перекодирование.</p>
       </div>
       <div class="feature-card" onclick="navigate('youtube')" onmousemove="this.style.setProperty('--mx',(event.offsetX)+'px');this.style.setProperty('--my',(event.offsetY)+'px')">
         <div class="icon youtube">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
         </div>
-        <h3>YouTube Качалка</h3>
-        <p>Скачайте видео MP4 или аудио MP3 с YouTube. Вставьте ссылку и нажмите «Найти».</p>
+        <h3 data-i18n="home.yt.title">YouTube Качалка</h3>
+        <p data-i18n="home.yt.desc">Скачайте видео MP4 или аудио MP3 с YouTube. Вставьте ссылку и нажмите «Найти».</p>
+      </div>
+      <div class="feature-card" onclick="navigate('gif')" onmousemove="this.style.setProperty('--mx',(event.offsetX)+'px');this.style.setProperty('--my',(event.offsetY)+'px')">
+        <div class="icon image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+        </div>
+        <h3 data-i18n="home.gif.title">Создание GIF</h3>
+        <p data-i18n="home.gif.desc">Соберите анимацию из картинок: кадры, скорость, размер. Живой предпросмотр тайминга — всё в браузере.</p>
+      </div>
+      <div class="feature-card" onclick="navigate('editor')" onmousemove="this.style.setProperty('--mx',(event.offsetX)+'px');this.style.setProperty('--my',(event.offsetY)+'px')">
+        <div class="icon edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        </div>
+        <h3 data-i18n="home.ed.title">Редактор изображений</h3>
+        <p data-i18n="home.ed.desc">Кадрирование, яркость, контраст, цвет, повороты — всё с живым предпросмотром изменений.</p>
       </div>
     </div>
   </section>
@@ -814,8 +1185,8 @@ button{ font-family:inherit; cursor:pointer; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
       </div>
       <div>
-        <h2>Обрезка медиа</h2>
-        <p>Видео и аудио обрабатываются полностью в браузере — файлы никуда не отправляются.</p>
+        <h2 data-i18n="trim.header">Обрезка медиа</h2>
+        <p data-i18n="trim.header.desc">Видео и аудио обрабатываются полностью в браузере — файлы никуда не отправляются.</p>
       </div>
     </div>
 
@@ -824,9 +1195,9 @@ button{ font-family:inherit; cursor:pointer; }
       <div class="upload-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       </div>
-      <p class="big">Перетащите файл сюда</p>
-      <p class="small">Поддерживаются: MP3, WAV, MP4, WEBM</p>
-      <button class="btn primary" id="pickBtn" type="button">Выбрать файл</button>
+      <p class="big" data-i18n="trim.drop.big">Перетащите файл сюда</p>
+      <p class="small" data-i18n="trim.drop.small">Поддерживаются: MP3, WAV, MP4, WEBM</p>
+      <button class="btn primary" id="pickBtn" type="button" data-i18n="trim.pick">Выбрать файл</button>
       <input type="file" id="fileInput" accept=".mp3,.wav,.mp4,.webm,audio/*,video/*">
       <div id="errorMsg" style="color:var(--danger);font-size:13px;margin-top:14px;min-height:18px;"></div>
     </section>
@@ -848,7 +1219,7 @@ button{ font-family:inherit; cursor:pointer; }
         <div class="transport">
           <button class="btn primary btn-sm" id="playRangeBtn" type="button">
             <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Воспроизвести
+            <span data-i18n="trim.play">Воспроизвести</span>
           </button>
           <div class="time-readout"><span id="curTime">00:00.000</span> / <span id="totalTime">00:00.000</span></div>
         </div>
@@ -856,7 +1227,7 @@ button{ font-family:inherit; cursor:pointer; }
 
       <!-- Timeline -->
       <div class="timeline-section" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);margin-top:16px;">
-        <div class="timeline-label">Таймлайн</div>
+        <div class="timeline-label" data-i18n="trim.timeline">Таймлайн</div>
         <div class="timeline-wrap" id="timelineWrap">
           <canvas id="timelineCanvas"></canvas>
           <div class="trim-range" id="trimRange"></div>
@@ -871,15 +1242,15 @@ button{ font-family:inherit; cursor:pointer; }
 
         <div class="controls-grid">
           <div class="time-input-group">
-            <label>Начало (мм:сс)</label>
+            <label data-i18n="trim.start">Начало (мм:сс)</label>
             <input type="text" id="startInput" value="00:00.000">
           </div>
           <div class="time-input-group">
-            <label>Конец (мм:сс)</label>
+            <label data-i18n="trim.end">Конец (мм:сс)</label>
             <input type="text" id="endInput" value="00:00.000">
           </div>
           <div class="selection-info">
-            <div class="label">Длительность выделения</div>
+            <div class="label" data-i18n="trim.seldur">Длительность выделения</div>
             <div class="value" id="selDuration">00:00.000</div>
           </div>
         </div>
@@ -889,15 +1260,15 @@ button{ font-family:inherit; cursor:pointer; }
       <div class="option-row">
         <input type="checkbox" id="accurateModeCheckbox">
         <div class="option-text">
-          <strong>Точная обрезка</strong>
-          <div class="option-hint">Перекодирование (медленнее, но режет ровно по миллисекунде). По умолчанию — быстрая обрезка без перекодирования, точка обрезки округляется до ближайшего опорного кадра.</div>
+          <strong data-i18n="trim.accurate">Точная обрезка</strong>
+          <div class="option-hint" data-i18n="trim.accurate.hint">Перекодирование (медленнее, но режет ровно по миллисекунде). По умолчанию — быстрая обрезка без перекодирования, точка обрезки округляется до ближайшего опорного кадра.</div>
         </div>
       </div>
       <div class="option-row" style="margin-top:8px;">
         <input type="checkbox" id="autoReturnCheckbox">
         <div class="option-text">
-          <strong>Авто-возврат в выделение</strong>
-          <div class="option-hint">Если полоса воспроизведения выходит за пределы обрезаемого участка — автоматически возвращать её в начало выделения.</div>
+          <strong data-i18n="trim.autoreturn">Авто-возврат в выделение</strong>
+          <div class="option-hint" data-i18n="trim.autoreturn.hint">Если полоса воспроизведения выходит за пределы обрезаемого участка — автоматически возвращать её в начало выделения.</div>
         </div>
       </div>
 
@@ -905,23 +1276,316 @@ button{ font-family:inherit; cursor:pointer; }
       <div class="export-section">
         <button class="btn primary" id="exportBtn" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Обрезать и сохранить
+          <span data-i18n="trim.export">Обрезать и сохранить</span>
         </button>
         <div id="progressWrap" hidden>
           <div class="progress-track"><div id="progressBar"></div></div>
-          <span id="progressLabel">Готовим ffmpeg.wasm…</span>
+          <span id="progressLabel" data-i18n="trim.prep">Готовим ffmpeg.wasm…</span>
         </div>
       </div>
 
       <div class="log-panel" id="logPanel"></div>
 
       <div class="footer-actions">
-        <button class="btn secondary" id="resetBtn" type="button">Загрузить другой файл</button>
+        <button class="btn secondary" id="resetBtn" type="button" data-i18n="trim.another">Загрузить другой файл</button>
       </div>
     </section>
   </section>
 
-  <div class="version">V0.718E</div>
+  <!-- ========== GIF MAKER PAGE ========== -->
+  <section id="page-gif" class="page">
+    <div class="section-header">
+      <div class="icon purple">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+      </div>
+      <div>
+        <h2 data-i18n="gif.header">Создание GIF</h2>
+        <p data-i18n="gif.header.desc">Соберите анимацию из картинок — качественная палитра через ffmpeg.wasm, всё в браузере.</p>
+      </div>
+    </div>
+
+    <section id="gifDropzone" tabindex="0">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <p class="big" data-i18n="gif.drop.big">Перетащите кадры сюда</p>
+      <p class="small" data-i18n="gif.drop.small">Картинки-кадры (PNG, JPEG, WEBP, GIF, BMP) или видео MP4/WebM — из видео сделаем GIF</p>
+      <button class="btn primary" id="gifPickBtn" type="button" data-i18n="gif.pick">Выбрать файлы</button>
+      <input type="file" id="gifFileInput" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/*,.mp4,.webm,.mov,video/mp4,video/webm">
+      <div id="gifDropError" style="color:var(--danger);font-size:13px;margin-top:14px;min-height:18px;"></div>
+    </section>
+
+    <section id="gifWorkspace" hidden style="margin-top:20px;">
+      <div class="conv-layout">
+        <div class="conv-main">
+          <div class="conv-preview-stage">
+            <canvas id="gifPreviewCanvas"></canvas>
+            <video id="gifPreviewVideo" hidden muted loop playsinline></video>
+            <img id="gifAnimImg" hidden alt="">
+            <img id="gifResultImg" hidden alt="">
+          </div>
+          <div class="conv-preview-bar">
+            <span class="conv-preview-name" id="gifPreviewName"></span>
+            <span class="conv-preview-info" id="gifPreviewInfo"></span>
+          </div>
+          <div class="conv-thumbs" id="gifFrames"></div>
+          <div class="conv-files-actions">
+            <button class="btn ghost btn-sm" id="gifAddMoreBtn" type="button" data-i18n="gif.addmore">+ Добавить кадры</button>
+            <button class="btn ghost btn-sm" id="gifClearBtn" type="button" data-i18n="gif.clear">Очистить</button>
+          </div>
+        </div>
+        <aside class="conv-panel">
+          <div class="conv-panel-title" data-i18n="gif.panel">Анимация</div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="gif.speed">Скорость</span><span id="gifFpsVal">10 к/с</span></div>
+            <input type="range" id="gifFps" min="1" max="30" step="1" value="10">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="gif.size">Размер</span><span id="gifScaleVal">100%</span></div>
+            <input type="range" id="gifScale" min="10" max="100" step="5" value="100">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="gif.loop">Повторов</span><span id="gifLoopVal">∞</span></div>
+            <input type="range" id="gifLoop" min="0" max="10" step="1" value="0" title="0 — бесконечная анимация" data-i18n-title="gif.loop.title">
+          </div>
+          <div class="conv-group" id="gifVideoOpts" hidden>
+            <div class="conv-label" data-i18n="gif.frag">Фрагмент видео</div>
+            <div class="ed-toolbar" style="margin:8px 0 2px;">
+              <button type="button" class="tool" id="gifRotBtn" title="Повернуть на 90°" data-i18n-title="ed.rot">⟳</button>
+              <button type="button" class="tool toggle" id="gifFlipHBtn" title="Отразить по горизонтали" data-i18n-title="ed.fliph">↔</button>
+              <button type="button" class="tool toggle" id="gifFlipVBtn" title="Отразить по вертикали" data-i18n-title="ed.flipv">↕</button>
+              <span class="conv-rot-label" id="gifRotLabel">0°</span>
+            </div>
+            <div class="conv-group" style="margin-top:8px;">
+              <div class="ed-slider-head"><span data-i18n="gif.start">Начало</span><span id="gifStartVal">0.0 с</span></div>
+              <input type="range" id="gifStart" min="0" max="0" step="0.1" value="0">
+            </div>
+            <div class="conv-group">
+              <div class="ed-slider-head"><span data-i18n="gif.dur">Длительность</span><span id="gifDurVal">3.0 с</span></div>
+              <input type="range" id="gifDur" min="0.2" max="15" step="0.1" value="3">
+            </div>
+          </div>
+          <div class="conv-group" id="gifQualityWrap" hidden>
+            <div class="conv-label" data-i18n="gif.quality">Качество GIF</div>
+            <div class="seg" id="gifQualitySeg">
+              <button type="button" data-q="low" data-i18n="gif.q.low">Низкое</button>
+              <button type="button" data-q="med" class="active" data-i18n="gif.q.med">Среднее</button>
+              <button type="button" data-q="high" data-i18n="gif.q.high">Высокое</button>
+            </div>
+          </div>
+          <div class="conv-group">
+            <div class="conv-label" data-i18n="gif.dithermode">Сглаживание градиентов</div>
+            <select id="gifDitherMode" class="gif-select">
+              <option value="bayer" selected>Bayer</option>
+              <option value="floyd_steinberg">Floyd–Steinberg</option>
+              <option value="sierra2">Sierra-2</option>
+              <option value="none" data-i18n="gif.dither.none">Нет</option>
+            </select>
+          </div>
+          <button class="btn primary conv-convert" id="gifCreateBtn" type="button" data-i18n="gif.create">Создать GIF</button>
+          <div id="gifProgressWrap" hidden>
+            <div class="progress-track"><div id="gifProgressBar" style="width:50%"></div></div>
+            <span id="gifProgressLabel" data-i18n="gif.prep">Готовим…</span>
+          </div>
+          <div id="gifError" style="color:var(--danger);font-size:13px;min-height:18px;"></div>
+        </aside>
+      </div>
+    </section>
+  </section>
+
+  <!-- ========== IMAGE EDITOR PAGE ========== -->
+  <section id="page-editor" class="page">
+    <div class="section-header">
+      <div class="icon amber">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      </div>
+      <div>
+        <h2 data-i18n="ed.header">Редактор изображений</h2>
+        <p data-i18n="ed.header.desc">Кадрирование, коррекция и экспорт — всё в браузере, предпросмотр обновляется в реальном времени.</p>
+      </div>
+    </div>
+
+    <section id="edDropzone" tabindex="0">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <p class="big" data-i18n="ed.drop.big">Перетащите изображение сюда</p>
+      <p class="small" data-i18n="ed.drop.small">Поддерживаются: PNG, JPEG, WEBP, GIF, BMP</p>
+      <button class="btn primary" id="edPickBtn" type="button" data-i18n="ed.pick">Выбрать файл</button>
+      <input type="file" id="edFileInput" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/*">
+      <div id="edError" style="color:var(--danger);font-size:13px;margin-top:14px;min-height:18px;"></div>
+    </section>
+
+    <section id="edWorkspace" hidden style="margin-top:20px;">
+      <div class="conv-layout">
+        <div class="conv-main">
+          <div class="conv-preview-stage" id="edStage">
+            <canvas id="edCanvas"></canvas>
+            <div id="edCropOverlay" hidden>
+              <div id="edCropRect">
+                <span class="ed-handle" data-h="nw"></span>
+                <span class="ed-handle" data-h="ne"></span>
+                <span class="ed-handle" data-h="sw"></span>
+                <span class="ed-handle" data-h="se"></span>
+              </div>
+            </div>
+            <div class="ed-zoom" id="edZoomBadge" hidden>
+              <button type="button" id="edZoomOut" title="Отдалить" data-i18n-title="zoom.out">−</button>
+              <span id="edZoomVal">100%</span>
+              <button type="button" id="edZoomIn" title="Приблизить" data-i18n-title="zoom.in">+</button>
+              <button type="button" id="edZoomReset" title="Вписать в окно" data-i18n-title="zoom.fit">⤢</button>
+            </div>
+          </div>
+          <div class="conv-preview-bar">
+            <span class="conv-preview-name" id="edFileName"></span>
+            <span id="edInfo"></span>
+            <span class="ed-toolbar">
+              <button type="button" class="tool" id="edRotateBtn" title="Повернуть на 90°" data-i18n-title="ed.rot">⟳</button>
+              <button type="button" class="tool toggle" id="edFlipHBtn" title="Отразить по горизонтали" data-i18n-title="ed.fliph">↔</button>
+              <button type="button" class="tool toggle" id="edFlipVBtn" title="Отразить по вертикали" data-i18n-title="ed.flipv">↕</button>
+              <button type="button" class="tool" id="edCropBtn" title="Кадрировать" data-i18n-title="ed.crop">⬚</button>
+              <button type="button" class="tool" id="edCompareBtn" title="Сравнить с оригиналом (удерживайте)" data-i18n-title="ed.compare">◐</button>
+            </span>
+          </div>
+          <div class="ed-crop-actions" id="edCropActions" hidden>
+            <span id="edCropDims"></span>
+            <span class="ed-presets ed-aspect" id="edAspectSeg">
+              <button type="button" data-ar="0" class="active" data-i18n="crop.free">Свободно</button>
+              <button type="button" data-ar="1">1:1</button>
+              <button type="button" data-ar="1.3333">4:3</button>
+              <button type="button" data-ar="1.7778">16:9</button>
+            </span>
+            <button class="btn primary btn-sm" id="edCropApply" type="button" data-i18n="crop.apply">Применить кадр</button>
+            <button class="btn ghost btn-sm" id="edCropCancel" type="button" data-i18n="crop.cancel">Отмена</button>
+            <span class="ed-crop-hint" data-i18n="crop.hint">Enter — применить · Esc — отмена</span>
+          </div>
+          <div class="conv-files-actions">
+            <button class="btn ghost btn-sm" id="edResetBtn" type="button" data-i18n="ed.another">Другое изображение</button>
+          </div>
+        </div>
+        <aside class="conv-panel">
+          <div class="ed-tabs">
+            <button type="button" data-tab="adjust" class="active" data-i18n="ed.panel.corr">Коррекция</button>
+            <button type="button" data-tab="geo" data-i18n="ed.geo">Геометрия</button>
+            <button type="button" data-tab="text" data-i18n="ed.text">Текст</button>
+            <button type="button" data-tab="export" data-i18n="ed.export">Экспорт</button>
+          </div>
+          <div class="ed-tab-body" id="edSecAdjust">
+          <div class="ed-presets">
+            <button type="button" data-preset="reset" class="active" data-i18n="preset.reset">Оригинал</button>
+            <button type="button" data-preset="bw" data-i18n="preset.bw">Ч/Б</button>
+            <button type="button" data-preset="sepia" data-i18n="preset.sepia">Сепия</button>
+            <button type="button" data-preset="cold" data-i18n="preset.cold">Холод</button>
+            <button type="button" data-preset="warm" data-i18n="preset.warm">Тепло</button>
+            <button type="button" data-preset="vintage" data-i18n="preset.vintage">Винтаж</button>
+            <button type="button" data-preset="noir" data-i18n="preset.noir">Нуар</button>
+            <button type="button" data-preset="chrome" data-i18n="preset.chrome">Хром</button>
+            <button type="button" data-preset="invert" data-i18n="preset.invert">Инверсия</button>
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.bright">Яркость</span><span id="edBrightVal">100%</span></div>
+            <input type="range" id="edBright" min="20" max="200" step="1" value="100" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.contrast">Контраст</span><span id="edContrastVal">100%</span></div>
+            <input type="range" id="edContrast" min="0" max="200" step="1" value="100" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.saturate">Насыщенность</span><span id="edSaturateVal">100%</span></div>
+            <input type="range" id="edSaturate" min="0" max="200" step="1" value="100" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.hue">Оттенок</span><span id="edHueVal">0°</span></div>
+            <input type="range" id="edHue" min="-180" max="180" step="1" value="0" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.blur">Размытие</span><span id="edBlurVal">0</span></div>
+            <input type="range" id="edBlur" min="0" max="20" step="0.5" value="0" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.warm">Тепло</span><span id="edWarmVal">0</span></div>
+            <input type="range" id="edWarm" min="-50" max="50" step="1" value="0" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          <div class="conv-group">
+            <div class="ed-slider-head"><span data-i18n="ed.vignette">Виньетка</span><span id="edVigVal">0</span></div>
+            <input type="range" id="edVig" min="0" max="100" step="1" value="0" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+          </div>
+          </div>
+          <div class="ed-tab-body" id="edSecGeo" hidden>
+            <div class="conv-group">
+              <div class="ed-slider-head"><span data-i18n="ed.scale">Масштаб</span><span id="edScaleVal">100%</span></div>
+              <input type="range" id="edScale" min="10" max="200" step="1" value="100" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+            </div>
+            <div class="conv-group">
+              <div class="ed-slider-head"><span data-i18n="ed.radius">Скругление углов</span><span id="edRadVal">0%</span></div>
+              <input type="range" id="edRad" min="0" max="50" step="1" value="0" title="Двойной клик — сброс" data-i18n-title="ed.dblreset">
+            </div>
+          </div>
+          <div class="ed-tab-body" id="edSecText" hidden>
+            <button class="btn secondary conv-convert" id="edTextAdd" type="button" style="padding:9px 16px;font-size:13px;" data-i18n="ed.text.add">+ Добавить текст</button>
+            <div class="conv-group" id="edTextControls" hidden>
+              <div class="conv-group">
+                <div class="conv-label" data-i18n="ed.text.content">Содержимое</div>
+                <input type="text" id="edTextInput" class="gif-select" maxlength="120">
+              </div>
+              <div class="conv-group">
+                <div class="conv-label" data-i18n="ed.text.styles">Стили</div>
+                <div class="ed-presets" id="edTextStyleSeg">
+                  <button type="button" data-ts="title" data-i18n="ed.text.p.title">Заголовок</button>
+                  <button type="button" data-ts="caption" data-i18n="ed.text.p.caption">Подпись</button>
+                  <button type="button" data-ts="wm" data-i18n="ed.text.p.wm">Водяной знак</button>
+                </div>
+              </div>
+              <div class="conv-group">
+                <div class="ed-slider-head"><span data-i18n="ed.text.size">Размер</span><span id="edTextSizeVal">8%</span></div>
+                <input type="range" id="edTextSize" min="2" max="30" step="0.5" value="8">
+              </div>
+              <div class="conv-group">
+                <div class="conv-label" data-i18n="ed.text.color">Цвет</div>
+                <div id="edTextColorPresets">
+                  <button type="button" data-c="#ffffff" title="White"></button>
+                  <button type="button" data-c="#000000" title="Black"></button>
+                  <button type="button" data-c="#6ee7b7" title="Mint"></button>
+                  <button type="button" data-c="#ff5c5c" title="Red"></button>
+                  <button type="button" data-c="#ffd166" title="Yellow"></button>
+                  <button type="button" data-c="#4d9fff" title="Blue"></button>
+                </div>
+                <input type="color" id="edTextColor" value="#ffffff">
+              </div>
+              <div class="conv-group">
+                <div class="conv-label" data-i18n="ed.text.pos">Позиция</div>
+                <div class="ed-toolbar" style="gap:6px;">
+                  <button type="button" class="tool" id="edTextTop" title="Вверх" data-i18n-title="ed.text.ttop">⤒</button>
+                  <button type="button" class="tool" id="edTextMid" title="По центру" data-i18n-title="ed.text.tmid">⌤</button>
+                  <button type="button" class="tool" id="edTextBot" title="Вниз" data-i18n-title="ed.text.tbot">⤓</button>
+                  <button type="button" class="tool toggle active" id="edTextStroke" title="Обводка" data-i18n-title="ed.text.stroke">Ⓢ</button>
+                </div>
+              </div>
+              <button class="btn danger btn-sm" id="edTextDel" type="button" data-i18n="ed.text.del">Удалить текст</button>
+              <div class="option-hint" style="font-size:12px;color:var(--fg-muted);" data-i18n="ed.text.hint">Тяните текст мышкой прямо на изображении</div>
+            </div>
+          </div>
+          <div class="ed-tab-body" id="edSecExport" hidden>
+            <div class="conv-group">
+              <div class="conv-label" data-i18n="ed.format">Формат</div>
+              <div class="seg" id="edFormatSeg">
+                <button type="button" data-format="image/png" class="active">PNG</button>
+                <button type="button" data-format="image/jpeg">JPEG</button>
+                <button type="button" data-format="image/webp">WEBP</button>
+              </div>
+            </div>
+            <div class="conv-group" id="edQualityWrap" hidden>
+              <div class="conv-label"><span data-i18n="ed.quality">Качество</span> · <span id="edQualityVal">92%</span></div>
+              <input type="range" id="edQuality" min="10" max="100" step="1" value="92">
+            </div>
+            <button class="btn primary conv-convert" id="edSaveBtn" type="button" data-i18n="ed.save">Сохранить</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </section>
+
+  <div class="version">V0.810B</div>
 
   <!-- ========== YOUTUBE PAGE ========== -->
   <section id="page-youtube" class="page">
@@ -930,21 +1594,21 @@ button{ font-family:inherit; cursor:pointer; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
       </div>
       <div>
-        <h2>YouTube Качалка</h2>
-        <p>Скачайте видео или аудио с YouTube по ссылке.</p>
+        <h2 data-i18n="yt.header">YouTube Качалка</h2>
+        <p data-i18n="yt.header.desc">Скачайте видео или аудио с YouTube по ссылке.</p>
       </div>
     </div>
 
     <div class="youtube-card">
       <div class="url-input-row">
         <div class="input-group">
-          <label>Ссылка на YouTube</label>
+          <label data-i18n="yt.url.label">Ссылка на YouTube</label>
           <input type="url" id="youtubeUrl" placeholder="https://youtube.com/watch?v=..." value="">
         </div>
         <div style="display:flex;align-items:flex-end;">
           <button class="btn primary" id="fetchInfoBtn" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Найти
+            <span data-i18n="yt.find">Найти</span>
           </button>
         </div>
       </div>
@@ -970,8 +1634,8 @@ button{ font-family:inherit; cursor:pointer; }
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
               </div>
               <div>
-                <div class="fo-label">MP4 Видео</div>
-                <div class="fo-desc">Скачать как видеофайл</div>
+                <div class="fo-label" data-i18n="yt.mp4">MP4 Видео</div>
+                <div class="fo-desc" data-i18n="yt.mp4.desc">Скачать как видеофайл</div>
               </div>
             </label>
             <label class="format-option" id="formatMp3">
@@ -980,14 +1644,14 @@ button{ font-family:inherit; cursor:pointer; }
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               </div>
               <div>
-                <div class="fo-label">MP3 Аудио</div>
-                <div class="fo-desc">Извлечь аудиодорожку</div>
+                <div class="fo-label" data-i18n="yt.mp3">MP3 Аудио</div>
+                <div class="fo-desc" data-i18n="yt.mp3.desc">Извлечь аудиодорожку</div>
               </div>
             </label>
           </div>
 
 <div class="quality-row">
-            <label for="ytQuality">Качество</label>
+            <label for="ytQuality" data-i18n="yt.quality">Качество</label>
             <select id="ytQuality">
               <option value="2160p">4K (2160p)</option>
               <option value="1440p">1440p</option>
@@ -998,7 +1662,7 @@ button{ font-family:inherit; cursor:pointer; }
             </select>
           </div>
           <div class="quality-row" id="ytBitrateRow" hidden>
-            <label for="ytBitrate">Битрейт</label>
+            <label for="ytBitrate" data-i18n="yt.bitrate">Битрейт</label>
             <select id="ytBitrate">
               <option value="320">320 kbps</option>
               <option value="256">256 kbps</option>
@@ -1010,7 +1674,7 @@ button{ font-family:inherit; cursor:pointer; }
           <div style="margin-top:20px;">
             <button class="btn primary" id="ytDownloadBtn" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Скачать
+              <span data-i18n="yt.download">Скачать</span>
             </button>
           </div>
         </div>
@@ -1019,8 +1683,8 @@ button{ font-family:inherit; cursor:pointer; }
       <div class="download-progress" id="ytProgressWrap" hidden>
         <div class="progress-track"><div id="ytProgressBar"></div></div>
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px;">
-          <span id="ytProgressLabel">Подготовка…</span>
-          <button class="btn danger btn-sm" id="ytCancelBtn" type="button">Отменить</button>
+          <span id="ytProgressLabel" data-i18n="yt.prep">Подготовка…</span>
+          <button class="btn danger btn-sm" id="ytCancelBtn" type="button" data-i18n="yt.cancel">Отменить</button>
         </div>
       </div>
     </div>
@@ -1031,31 +1695,474 @@ button{ font-family:inherit; cursor:pointer; }
 <div class="modal-overlay" id="ffmpegModalOverlay" hidden>
   <div class="modal-box">
     <div class="modal-icon">⚠</div>
-    <h2>FFmpeg не найден</h2>
-    <p>
+    <h2 data-i18n="fm.title">FFmpeg не найден</h2>
+    <p data-i18n-html="fm.p1">
       Для скачивания видео/аудио с YouTube (склейка видео+звука, извлечение MP3)
       нужна программа <b>FFmpeg</b>, а на этом компьютере она не установлена.
       Обрезка видео на главной странице работает независимо от неё и не пострадает.
     </p>
-    <p class="modal-note">
+    <p class="modal-note" data-i18n-html="fm.p2">
       Автоматическая установка скачает официальную сборку с GitHub-репозитория
       <b>ShareX/FFmpeg</b> (github.com/ShareX/FFmpeg) и распакует её в вашу
       пользовательскую папку — ничего больше на компьютере не меняется.
     </p>
     <div id="ffmpegModalProgress" hidden>
       <div class="progress-track"><div id="ffmpegModalProgressBar"></div></div>
-      <span id="ffmpegModalProgressLabel">Подготовка…</span>
+      <span id="ffmpegModalProgressLabel" data-i18n="fm.prep">Подготовка…</span>
     </div>
     <div id="ffmpegModalError" class="modal-error"></div>
     <div class="modal-actions">
-      <button class="btn primary" id="ffmpegInstallAutoBtn" type="button">Установить автоматически</button>
-      <button class="btn secondary" id="ffmpegInstallManualBtn" type="button">Установить вручную</button>
+      <button class="btn primary" id="ffmpegInstallAutoBtn" type="button" data-i18n="fm.auto">Установить автоматически</button>
+      <button class="btn secondary" id="ffmpegInstallManualBtn" type="button" data-i18n="fm.manual">Установить вручную</button>
     </div>
-    <button class="modal-dismiss" id="ffmpegModalDismissBtn" type="button">Пропустить, я не буду качать с YouTube</button>
+    <button class="modal-dismiss" id="ffmpegModalDismissBtn" type="button" data-i18n="fm.skip">Пропустить, я не буду качать с YouTube</button>
+  </div>
+</div>
+
+<!-- yt-dlp update modal -->
+<div class="modal-overlay" id="ytdlpModalOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-icon">⬆</div>
+    <h2 data-i18n="yd.title">Доступно обновление yt-dlp</h2>
+    <p>
+      <span data-i18n-html="yd.p1a">Вышла новая версия <b>yt-dlp</b> (сейчас </span><span id="ytdlpCurrent">?</span><span data-i18n-html="yd.p1b">, доступно </span><span id="ytdlpLatest">?</span><span data-i18n-html="yd.p1c">). Старая версия может перестать скачивать видео с YouTube (например, ошибка <b>HTTP 403: Forbidden</b>). Обновление не требует прав администратора и не затрагивает остальную программу.</span>
+    </p>
+    <p class="modal-note" data-i18n-html="yd.note">
+      Новая версия скачивается с PyPI и сохраняется в вашу пользовательскую папку.
+      Чтобы она вступила в силу — <b>перезапустите программу</b> после установки.
+    </p>
+    <div id="ytdlpModalProgress" hidden>
+      <div class="progress-track"><div id="ytdlpModalProgressBar"></div></div>
+      <span id="ytdlpModalProgressLabel" data-i18n="yd.prep">Подготовка…</span>
+    </div>
+    <div id="ytdlpModalError" class="modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn primary" id="ytdlpUpdateBtn" type="button" data-i18n="yd.update">Обновить</button>
+      <button class="btn secondary" id="ytdlpManualBtn" type="button" data-i18n="yd.whatsnew">Что нового</button>
+    </div>
+    <button class="modal-dismiss" id="ytdlpModalDismissBtn" type="button" data-i18n="yd.later">Позже</button>
+  </div>
+</div>
+
+<!-- First-run language modal -->
+<div class="modal-overlay" id="langModalOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-icon">🌐</div>
+    <h2>Выберите язык · Choose language</h2>
+    <p>Язык можно поменять в любой момент — шестерёнка справа сверху.<br>You can change the language anytime — gear icon in the top right.</p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn primary" id="pickRuBtn" type="button">Русский</button>
+      <button class="btn primary" id="pickEnBtn" type="button">English</button>
+    </div>
   </div>
 </div>
 
 <script type="module">
+/* =========================================================================
+   SETTINGS + I18N — RU/EN, stored in localStorage. No machine translation:
+   the UI string set is finite, so a built-in dictionary keeps everything
+   instant and fully offline (the app promises zero telemetry).
+   ========================================================================= */
+const appSettings = Object.assign(
+  { lang: null, resetOnHome: true },
+  JSON.parse(localStorage.getItem('mtools_settings') || '{}')
+);
+let settingsReady = false; // disk settings are read at startup; see init below
+function saveSettings(){
+  localStorage.setItem('mtools_settings', JSON.stringify(appSettings));
+  // Mirror to disk via the server. The server picks a new port whenever 8000
+  // is busy, and localStorage is per-origin (localhost:8000 ≠ :8001), so the
+  // browser storage silently forgets everything between launches — the file
+  // in %APPDATA%/MTools is the source of truth.
+  // Guard: never write BEFORE the on-disk settings have been read, or the
+  // startup applyLang() would clobber them with lang:null.
+  if (!settingsReady) return;
+  fetch('/api/ui-settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(appSettings),
+  }).catch(() => {});
+}
+
+const I18N = {
+ru: {
+  'nav.home':'На главную',
+  'settings.title':'Настройки',
+  'settings.resetOnHome':'Сбрасывать загруженное при переходе на главную',
+  'home.hero':'MTools — медиа-инструменты<br>прямо в <span>браузере</span>',
+  'home.trim.title':'Обрезка медиа',
+  'home.trim.desc':'Обрежьте видео или аудио. Быстрое копирование без потери качества или точное перекодирование.',
+  'home.yt.title':'YouTube Качалка',
+  'home.yt.desc':'Скачайте видео MP4 или аудио MP3 с YouTube. Вставьте ссылку и нажмите «Найти».',
+  'home.gif.title':'Создание GIF',
+  'home.gif.desc':'Соберите анимацию из картинок: кадры, скорость, размер. Живой предпросмотр тайминга — всё в браузере.',
+  'home.ed.title':'Редактор изображений',
+  'home.ed.desc':'Кадрирование, яркость, контраст, цвет, повороты — всё с живым предпросмотром изменений.',
+  'trim.header':'Обрезка медиа',
+  'trim.header.desc':'Видео и аудио обрабатываются полностью в браузере — файлы никуда не отправляются.',
+  'trim.drop.big':'Перетащите файл сюда',
+  'trim.drop.small':'Поддерживаются: MP3, WAV, MP4, WEBM',
+  'trim.pick':'Выбрать файл',
+  'trim.play':'Воспроизвести',
+  'trim.timeline':'Таймлайн',
+  'trim.start':'Начало (мм:сс)',
+  'trim.end':'Конец (мм:сс)',
+  'trim.seldur':'Длительность выделения',
+  'trim.accurate':'Точная обрезка',
+  'trim.accurate.hint':'Перекодирование (медленнее, но режет ровно по миллисекунде). По умолчанию — быстрая обрезка без перекодирования, точка обрезки округляется до ближайшего опорного кадра.',
+  'trim.autoreturn':'Авто-возврат в выделение',
+  'trim.autoreturn.hint':'Если полоса воспроизведения выходит за пределы обрезаемого участка — автоматически возвращать её в начало выделения.',
+  'trim.export':'Обрезать и сохранить',
+  'trim.another':'Загрузить другой файл',
+  'trim.prep':'Готовим ffmpeg.wasm…',
+  'trim.err.process':'Ошибка обработки',
+  'yt.header':'YouTube Качалка',
+  'yt.header.desc':'Скачайте видео или аудио с YouTube по ссылке.',
+  'yt.url.label':'Ссылка на YouTube',
+  'yt.find':'Найти',
+  'yt.mp4':'MP4 Видео',
+  'yt.mp4.desc':'Скачать как видеофайл',
+  'yt.mp3':'MP3 Аудио',
+  'yt.mp3.desc':'Извлечь аудиодорожку',
+  'yt.quality':'Качество',
+  'yt.bitrate':'Битрейт',
+  'yt.download':'Скачать',
+  'yt.prep':'Подготовка…',
+  'yt.cancel':'Отменить',
+  'gif.header':'Создание GIF',
+  'gif.header.desc':'Соберите анимацию из картинок — качественная палитра через ffmpeg.wasm, всё в браузере.',
+  'gif.drop.big':'Перетащите кадры сюда',
+  'gif.drop.small':'Картинки-кадры (PNG, JPEG, WEBP, GIF, BMP) или видео MP4/WebM — из видео сделаем GIF',
+  'gif.pick':'Выбрать файлы',
+  'gif.panel':'Анимация',
+  'gif.speed':'Скорость',
+  'gif.size':'Размер',
+  'gif.loop':'Повторов',
+  'gif.loop.title':'0 — бесконечная анимация',
+  'gif.frag':'Фрагмент видео',
+  'gif.start':'Начало',
+  'gif.dur':'Длительность',
+  'gif.quality':'Качество GIF',
+  'gif.q.low':'Низкое',
+  'gif.q.med':'Среднее',
+  'gif.q.high':'Высокое',
+  'gif.dithermode':'Сглаживание градиентов',
+  'gif.dither.none':'Нет',
+  'gif.create':'Создать GIF',
+  'gif.addmore':'+ Добавить кадры',
+  'gif.clear':'Очистить',
+  'gif.prep':'Готовим…',
+  'gif.fps':'к/с',
+  'gif.sec':'с',
+  'gif.frames':'кадров',
+  'gif.frame':'Кадр',
+  'gif.anim':'Анимация',
+  'gif.moveEarlier':'Сдвинуть раньше',
+  'gif.moveLater':'Сдвинуть позже',
+  'gif.removeFrame':'Убрать кадр',
+  'gif.err.mix':'Видео и картинки-кадры нельзя смешивать — взял только видео.',
+  'gif.err.noimg':'Не найдено изображений среди выбранных файлов.',
+  'gif.err.read':'Не удалось прочитать',
+  'gif.prog.ffmpeg':'Загружаем ffmpeg.wasm (один раз, ~30 МБ)…',
+  'gif.prog.prep':'Готовим кадры…',
+  'gif.prog.build':'Собираем GIF (палитра + кадры)…',
+  'gif.prog.loadvideo':'Загружаем видео…',
+  'gif.done':'Готово! GIF скачан.',
+  'gif.err.build':'Не удалось собрать GIF',
+  'gif.warn.big':'GIF получился очень большим — открываться может медленно. Уменьшите длительность, размер или FPS.',
+  'ed.header':'Редактор изображений',
+  'ed.header.desc':'Кадрирование, коррекция и экспорт — всё в браузере, предпросмотр обновляется в реальном времени.',
+  'ed.drop.big':'Перетащите изображение сюда',
+  'ed.drop.small':'Поддерживаются: PNG, JPEG, WEBP, GIF, BMP',
+  'ed.pick':'Выбрать файл',
+  'ed.panel.corr':'Коррекция',
+  'ed.geo':'Геометрия',
+  'ed.export':'Экспорт',
+  'ed.format':'Формат',
+  'ed.quality':'Качество',
+  'ed.save':'Сохранить',
+  'ed.another':'Другое изображение',
+  'ed.bright':'Яркость',
+  'ed.contrast':'Контраст',
+  'ed.saturate':'Насыщенность',
+  'ed.hue':'Оттенок',
+  'ed.blur':'Размытие',
+  'ed.warm':'Тепло',
+  'ed.vignette':'Виньетка',
+  'ed.scale':'Масштаб',
+  'ed.radius':'Скругление углов',
+  'ed.text':'Текст',
+  'ed.text.add':'+ Добавить текст',
+  'ed.text.content':'Содержимое',
+  'ed.text.size':'Размер',
+  'ed.text.color':'Цвет',
+  'ed.text.del':'Удалить текст',
+  'ed.text.hint':'Тяните текст мышкой прямо на изображении',
+  'ed.compare':'Сравнить с оригиналом (удерживайте)',
+  'ed.text.pos':'Позиция',
+  'ed.text.stroke':'Обводка',
+  'ed.text.ttop':'Вверх',
+  'ed.text.tmid':'По центру',
+  'ed.text.tbot':'Вниз',
+  'ed.text.styles':'Стили',
+  'ed.text.p.title':'Заголовок',
+  'ed.text.p.caption':'Подпись',
+  'ed.text.p.wm':'Водяной знак',
+  'ed.dblreset':'Двойной клик — сброс',
+  'ed.rot':'Повернуть на 90°',
+  'ed.fliph':'Отразить по горизонтали',
+  'ed.flipv':'Отразить по вертикали',
+  'ed.crop':'Кадрировать',
+  'ed.saved':'Сохранено',
+  'ed.err.notimg':'Это не изображение.',
+  'ed.err.read':'Не удалось прочитать файл.',
+  'ed.err.save':'Не удалось сохранить изображение.',
+  'preset.reset':'Оригинал',
+  'preset.bw':'Ч/Б',
+  'preset.sepia':'Сепия',
+  'preset.cold':'Холод',
+  'preset.warm':'Тепло',
+  'preset.vintage':'Винтаж',
+  'preset.noir':'Нуар',
+  'preset.chrome':'Хром',
+  'preset.invert':'Инверсия',
+  'crop.free':'Свободно',
+  'crop.apply':'Применить кадр',
+  'crop.cancel':'Отмена',
+  'crop.hint':'Enter — применить · Esc — отмена',
+  'zoom.out':'Отдалить',
+  'zoom.in':'Приблизить',
+  'zoom.fit':'Вписать в окно',
+  'fm.title':'FFmpeg не найден',
+  'fm.p1':'Для скачивания видео/аудио с YouTube (склейка видео+звука, извлечение MP3) нужна программа <b>FFmpeg</b>, а на этом компьютере она не установлена. Обрезка видео на главной странице работает независимо от неё и не пострадает.',
+  'fm.p2':'Автоматическая установка скачает официальную сборку с GitHub-репозитория <b>ShareX/FFmpeg</b> (github.com/ShareX/FFmpeg) и распакует её в вашу пользовательскую папку — ничего больше на компьютере не меняется.',
+  'fm.prep':'Подготовка…',
+  'fm.auto':'Установить автоматически',
+  'fm.manual':'Установить вручную',
+  'fm.skip':'Пропустить, я не буду качать с YouTube',
+  'fm.prog.start':'Запускаем установку…',
+  'fm.prog.dl':'Скачивание',
+  'fm.prog.unpack':'Распаковка…',
+  'fm.done':'Готово! FFmpeg установлен.',
+  'fm.err':'Ошибка установки',
+  'fm.err.start':'Не удалось запустить установку',
+  'fm.err.timeout':'Превышено время ожидания установки.',
+  'yd.title':'Доступно обновление yt-dlp',
+  'yd.p1a':'Вышла новая версия <b>yt-dlp</b> (сейчас ',
+  'yd.p1b':', доступно ',
+  'yd.p1c':'). Старая версия может перестать скачивать видео с YouTube (например, ошибка <b>HTTP 403: Forbidden</b>). Обновление не требует прав администратора и не затрагивает остальную программу.',
+  'yd.note':'Новая версия скачивается с PyPI и сохраняется в вашу пользовательскую папку. Чтобы она вступила в силу — <b>перезапустите программу</b> после установки.',
+  'yd.prep':'Подготовка…',
+  'yd.update':'Обновить',
+  'yd.whatsnew':'Что нового',
+  'yd.later':'Позже',
+  'yd.prog.start':'Запускаем обновление…',
+  'yd.prog.dl':'Скачивание',
+  'yd.prog.unpack':'Установка…',
+  'yd.done':'Готово! Перезапустите программу, чтобы применить обновление.',
+  'yd.err':'Ошибка обновления',
+  'yd.err.start':'Не удалось запустить обновление',
+  'yd.err.timeout':'Превышено время ожидания обновления.',
+},
+en: {
+  'nav.home':'Back home',
+  'settings.title':'Settings',
+  'settings.resetOnHome':'Reset loaded content when going back home',
+  'home.hero':'MTools — media tools<br>right in your <span>browser</span>',
+  'home.trim.title':'Media Trimmer',
+  'home.trim.desc':'Trim video or audio. Lossless stream copy or precise re-encoding.',
+  'home.yt.title':'YouTube Downloader',
+  'home.yt.desc':'Download MP4 video or MP3 audio from YouTube. Paste a link and hit Search.',
+  'home.gif.title':'GIF Maker',
+  'home.gif.desc':'Assemble an animation from pictures: frames, speed, size. Live timing preview — all in the browser.',
+  'home.ed.title':'Image Editor',
+  'home.ed.desc':'Crop, brightness, contrast, color, rotations — all with a live preview of your changes.',
+  'trim.header':'Media Trimmer',
+  'trim.header.desc':'Video and audio are processed entirely in your browser — files never leave your machine.',
+  'trim.drop.big':'Drop a file here',
+  'trim.drop.small':'Supported: MP3, WAV, MP4, WEBM',
+  'trim.pick':'Choose file',
+  'trim.play':'Play',
+  'trim.timeline':'Timeline',
+  'trim.start':'Start (mm:ss)',
+  'trim.end':'End (mm:ss)',
+  'trim.seldur':'Selection duration',
+  'trim.accurate':'Precise cut',
+  'trim.accurate.hint':'Re-encoding (slower, but cuts exactly to the millisecond). By default — fast cut without re-encoding; the cut point snaps to the nearest keyframe.',
+  'trim.autoreturn':'Auto-return to selection',
+  'trim.autoreturn.hint':'If the playhead leaves the selected range, automatically return it to the start of the selection.',
+  'trim.export':'Trim & save',
+  'trim.another':'Load another file',
+  'trim.prep':'Preparing ffmpeg.wasm…',
+  'trim.err.process':'Processing error',
+  'yt.header':'YouTube Downloader',
+  'yt.header.desc':'Download video or audio from YouTube by link.',
+  'yt.url.label':'YouTube link',
+  'yt.find':'Search',
+  'yt.mp4':'MP4 Video',
+  'yt.mp4.desc':'Save as a video file',
+  'yt.mp3':'MP3 Audio',
+  'yt.mp3.desc':'Extract the audio track',
+  'yt.quality':'Quality',
+  'yt.bitrate':'Bitrate',
+  'yt.download':'Download',
+  'yt.prep':'Preparing…',
+  'yt.cancel':'Cancel',
+  'gif.header':'GIF Maker',
+  'gif.header.desc':'Assemble an animation from pictures — quality palette via ffmpeg.wasm, all in the browser.',
+  'gif.drop.big':'Drop frames here',
+  'gif.drop.small':'Image frames (PNG, JPEG, WEBP, GIF, BMP) or MP4/WebM video — we will turn video into a GIF',
+  'gif.pick':'Choose files',
+  'gif.panel':'Animation',
+  'gif.speed':'Speed',
+  'gif.size':'Size',
+  'gif.loop':'Loops',
+  'gif.loop.title':'0 — infinite loop',
+  'gif.frag':'Video fragment',
+  'gif.start':'Start',
+  'gif.dur':'Length',
+  'gif.quality':'GIF quality',
+  'gif.q.low':'Low',
+  'gif.q.med':'Medium',
+  'gif.q.high':'High',
+  'gif.dithermode':'Gradient smoothing',
+  'gif.dither.none':'None',
+  'gif.create':'Create GIF',
+  'gif.addmore':'+ Add frames',
+  'gif.clear':'Clear',
+  'gif.prep':'Preparing…',
+  'gif.fps':'fps',
+  'gif.sec':'s',
+  'gif.frames':'frames',
+  'gif.frame':'Frame',
+  'gif.anim':'Animation',
+  'gif.moveEarlier':'Move earlier',
+  'gif.moveLater':'Move later',
+  'gif.removeFrame':'Remove frame',
+  'gif.err.mix':'Video and image frames cannot be mixed — kept the video only.',
+  'gif.err.noimg':'No images found among the selected files.',
+  'gif.err.read':'Could not read',
+  'gif.prog.ffmpeg':'Loading ffmpeg.wasm (once, ~30 MB)…',
+  'gif.prog.prep':'Preparing frames…',
+  'gif.prog.build':'Building GIF (palette + frames)…',
+  'gif.prog.loadvideo':'Loading video…',
+  'gif.done':'Done! GIF downloaded.',
+  'gif.warn.big':'The GIF turned out very large — it may open slowly. Reduce duration, size or FPS.',
+  'ed.header':'Image Editor',
+  'ed.header.desc':'Crop, adjust and export — all in the browser, with a real-time preview.',
+  'ed.drop.big':'Drop an image here',
+  'ed.drop.small':'Supported: PNG, JPEG, WEBP, GIF, BMP',
+  'ed.pick':'Choose file',
+  'ed.panel.corr':'Adjust',
+  'ed.geo':'Geometry',
+  'ed.export':'Export',
+  'ed.format':'Format',
+  'ed.quality':'Quality',
+  'ed.save':'Save',
+  'ed.another':'Another image',
+  'ed.bright':'Brightness',
+  'ed.contrast':'Contrast',
+  'ed.saturate':'Saturation',
+  'ed.hue':'Hue',
+  'ed.blur':'Blur',
+  'ed.warm':'Warmth',
+  'ed.vignette':'Vignette',
+  'ed.scale':'Scale',
+  'ed.radius':'Corner radius',
+  'ed.text':'Text',
+  'ed.text.add':'+ Add text',
+  'ed.text.content':'Content',
+  'ed.text.size':'Size',
+  'ed.text.color':'Color',
+  'ed.text.del':'Delete text',
+  'ed.text.hint':'Drag the text right on the image',
+  'ed.compare':'Compare with original (hold)',
+  'ed.text.pos':'Position',
+  'ed.text.stroke':'Outline',
+  'ed.text.ttop':'Top',
+  'ed.text.tmid':'Center',
+  'ed.text.tbot':'Bottom',
+  'ed.text.styles':'Styles',
+  'ed.text.p.title':'Heading',
+  'ed.text.p.caption':'Caption',
+  'ed.text.p.wm':'Watermark',
+  'ed.dblreset':'Double-click to reset',
+  'ed.rot':'Rotate 90°',
+  'ed.fliph':'Flip horizontally',
+  'ed.flipv':'Flip vertically',
+  'ed.crop':'Crop',
+  'ed.saved':'Saved',
+  'ed.err.notimg':'That is not an image.',
+  'ed.err.read':'Could not read the file.',
+  'ed.err.save':'Could not save the image.',
+  'preset.reset':'Original',
+  'preset.bw':'B&W',
+  'preset.sepia':'Sepia',
+  'preset.cold':'Cold',
+  'preset.warm':'Warm',
+  'preset.vintage':'Vintage',
+  'preset.noir':'Noir',
+  'preset.chrome':'Chrome',
+  'preset.invert':'Invert',
+  'crop.free':'Free',
+  'crop.apply':'Apply crop',
+  'crop.cancel':'Cancel',
+  'crop.hint':'Enter — apply · Esc — cancel',
+  'zoom.out':'Zoom out',
+  'zoom.in':'Zoom in',
+  'zoom.fit':'Fit to window',
+  'fm.title':'FFmpeg not found',
+  'fm.p1':'To download video/audio from YouTube (merging video+sound, extracting MP3) the <b>FFmpeg</b> program is required, and it is not installed on this computer. Video trimming on the home page works without it and will not be affected.',
+  'fm.p2':'Automatic installation downloads the official build from the <b>ShareX/FFmpeg</b> GitHub repository (github.com/ShareX/FFmpeg) and unpacks it into your user folder — nothing else on your computer is changed.',
+  'fm.prep':'Preparing…',
+  'fm.auto':'Install automatically',
+  'fm.manual':'Install manually',
+  'fm.skip':'Skip, I will not download from YouTube',
+  'fm.prog.start':'Starting installation…',
+  'fm.prog.dl':'Downloading',
+  'fm.prog.unpack':'Unpacking…',
+  'fm.done':'Done! FFmpeg installed.',
+  'fm.err':'Installation error',
+  'fm.err.start':'Could not start the installation',
+  'fm.err.timeout':'Installation timed out.',
+  'yd.title':'yt-dlp update available',
+  'yd.p1a':'A new version of <b>yt-dlp</b> is out (current ',
+  'yd.p1b':', available ',
+  'yd.p1c':'). The old version may stop downloading YouTube videos (e.g. the <b>HTTP 403: Forbidden</b> error). The update needs no admin rights and does not touch the rest of the app.',
+  'yd.note':'The new version is downloaded from PyPI and saved into your user folder. <b>Restart the app</b> after installation to apply it.',
+  'yd.prep':'Preparing…',
+  'yd.update':'Update',
+  'yd.whatsnew':"What's new",
+  'yd.later':'Later',
+  'yd.prog.start':'Starting update…',
+  'yd.prog.dl':'Downloading',
+  'yd.prog.unpack':'Installing…',
+  'yd.done':'Done! Restart the app to apply the update.',
+  'yd.err':'Update error',
+  'yd.err.start':'Could not start the update',
+  'yd.err.timeout':'Update timed out.',
+},
+};
+let lang = appSettings.lang || ((navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en');
+function t(key){
+  const d = I18N[lang] || I18N.ru;
+  return (d[key] != null) ? d[key] : (I18N.ru[key] != null ? I18N.ru[key] : key);
+}
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  // The toggle shows the CURRENT language; clicking switches to the other one
+  const lt = document.getElementById('langToggle');
+  if (lt) lt.textContent = lang === 'ru' ? 'RU' : 'EN';
+  if (typeof showQuote === 'function') showQuote();
+  if (typeof renderGifFrames === 'function' && gifFiles.length) renderGifFrames();
+  if (typeof startGifPreview === 'function' && !gifWorkspace.hidden) startGifPreview();
+  if (typeof updateEdInfo === 'function' && edBase) updateEdInfo();
+  saveSettings();
+}
+function setLang(l){ lang = l; appSettings.lang = l; applyLang(); }
+
 /* =========================================================================
    ROUTER
    ========================================================================= */
@@ -1081,11 +2188,15 @@ function resetTrimmerState(){
   fileInput.value = '';
 }
 function navigate(page){
+  // prev MUST be read before the .active class is removed — otherwise it is
+  // always 'home' and the reset-on-home setting never fires.
+  const prev = document.querySelector('.page.active')?.id?.replace('page-', '') || 'home';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const prev = document.querySelector('.active')?.id?.replace('page-', '') || 'home';
-  if (prev !== page) {
+  if (prev !== page && appSettings.resetOnHome) {
     if (prev === 'youtube') resetYtState();
     if (prev === 'trimmer') resetTrimmerState();
+    if (prev === 'gif') resetGifState();
+    if (prev === 'editor') resetEditorState();
   }
   const el = document.getElementById('page-' + page);
   if (el) el.classList.add('active');
@@ -1323,8 +2434,8 @@ async function drawVideoThumbnails(){
   frameCanvas.height = 90;
   const fctx = frameCanvas.getContext('2d');
   for (let i = 0; i < count; i++){
-    const t = Math.min(mediaDuration - 0.05, i * step);
-    await seekTo(tempVideo, t);
+    const tt = Math.min(mediaDuration - 0.05, i * step);
+    await seekTo(tempVideo, tt);
     try {
       fctx.drawImage(tempVideo, 0, 0, frameCanvas.width, frameCanvas.height);
       const destX = (i / count) * w;
@@ -1379,9 +2490,9 @@ function makeDraggable(marker, which){
       const rect = timelineWrap.getBoundingClientRect();
       let pct = ((ev.clientX - rect.left) / rect.width) * 100;
       pct = Math.min(100, Math.max(0, pct));
-      let t = percentToTime(pct);
-      if (which === 'start') startTime = Math.max(0, Math.min(t, endTime - 0.05));
-      else endTime = Math.min(mediaDuration, Math.max(t, startTime + 0.05));
+      let tt = percentToTime(pct);
+      if (which === 'start') startTime = Math.max(0, Math.min(tt, endTime - 0.05));
+      else endTime = Math.min(mediaDuration, Math.max(tt, startTime + 0.05));
       updateMarkers();
     };
     const onUp = () => {
@@ -1443,16 +2554,16 @@ trimRange.addEventListener('pointerdown', (e) => {
 });
 
 startInput.addEventListener('change', () => {
-  const t = parseTime(startInput.value);
-  if (t !== null) startTime = Math.max(0, Math.min(t, endTime - 0.05));
-  updateMarkers();
-});
-endInput.addEventListener('change', () => {
-  const t = parseTime(endInput.value);
-  if (t !== null) endTime = Math.min(mediaDuration, Math.max(t, startTime + 0.05));
+  const tt = parseTime(startInput.value);
+  if (tt !== null) startTime = Math.max(0, Math.min(tt, endTime - 0.05));
   updateMarkers();
 });
 
+endInput.addEventListener('change', () => {
+  const tt = parseTime(endInput.value);
+  if (tt !== null) endTime = Math.min(mediaDuration, Math.max(tt, startTime + 0.05));
+  updateMarkers();
+});
 const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
 
 function syncPlayBtn(){
@@ -1564,7 +2675,8 @@ async function saveOutputFile(blob, suggestedName, handle){
 exportBtn.addEventListener('click', async () => {
   if (!currentFile) return;
   const ext = getExt(currentFile.name).replace('.', '');
-  const suggestedName = 'mtools_' + currentFile.name;
+  const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+  const suggestedName = `${baseName}_mtools.${ext}`;
   // Ask where to save right away, while the click's user-gesture is fresh —
   // everything below (ffmpeg.wasm encode) can take a while.
   const { handle, cancelled } = await pickSaveLocation(suggestedName, ext);
@@ -1572,7 +2684,7 @@ exportBtn.addEventListener('click', async () => {
   exportBtn.disabled = true;
   progressWrap.hidden = false;
   progressBar.style.width = '0%';
-  progressLabel.textContent = 'Готовим ffmpeg.wasm…';
+  progressLabel.textContent = t('trim.prep');
   const inputName = 'input.' + ext;
   const outputName = 'output.' + ext;
   try {
@@ -1604,7 +2716,7 @@ exportBtn.addEventListener('click', async () => {
     logMsg('Обработка завершена.');
   } catch (err){
     logMsg('Ошибка: ' + err.message);
-    progressLabel.textContent = 'Ошибка обработки';
+    progressLabel.textContent = t('trim.err.process');
     console.error(err);
   } finally {
     exportBtn.disabled = false;
@@ -1640,6 +2752,20 @@ const ffmpegModalError        = document.getElementById('ffmpegModalError');
 const ffmpegInstallAutoBtn    = document.getElementById('ffmpegInstallAutoBtn');
 const ffmpegInstallManualBtn  = document.getElementById('ffmpegInstallManualBtn');
 const ffmpegModalDismissBtn   = document.getElementById('ffmpegModalDismissBtn');
+
+// yt-dlp auto-updater
+const ytdlpModalOverlay       = document.getElementById('ytdlpModalOverlay');
+const ytdlpModalProgress      = document.getElementById('ytdlpModalProgress');
+const ytdlpModalProgressBar   = document.getElementById('ytdlpModalProgressBar');
+const ytdlpModalProgressLabel = document.getElementById('ytdlpModalProgressLabel');
+const ytdlpModalError         = document.getElementById('ytdlpModalError');
+const ytdlpCurrent            = document.getElementById('ytdlpCurrent');
+const ytdlpLatest             = document.getElementById('ytdlpLatest');
+const ytdlpUpdateBtn          = document.getElementById('ytdlpUpdateBtn');
+const ytdlpManualBtn          = document.getElementById('ytdlpManualBtn');
+const ytdlpModalDismissBtn    = document.getElementById('ytdlpModalDismissBtn');
+
+
 const formatMp4       = document.getElementById('formatMp4');
 const formatMp3       = document.getElementById('formatMp3');
 
@@ -1890,20 +3016,34 @@ ytUrlInput.addEventListener('keydown', (e) => {
 /* =========================================================================
    JASON STATHAM QUOTES
    ========================================================================= */
-const stathamQuotes = [
-  '«У меня нет таланта — у меня есть упрямство» © Джейсон Стэтхем',
-  '«Я не ищу проблем, но если проблема находит меня — я готов» © Джейсон Стэтхем',
-  '«Никогда не сдавайся, даже когда всё против тебя» © Джейсон Стэтхем',
-  '«Лучшее оружие — это голова. Ну и пистолет, конечно» © Джейсон Стэтхем',
-  '«Главное — не размер, а то, как ты этим пользуешься» © Джейсон Стэтхем',
-  '«Я верю в тяжёлую работу и преданность делу» © Джейсон Стэтхем',
-];
-let quoteIndex = 0;
+const stathamQuotes = {
+  ru: [
+    '«У меня нет таланта — у меня есть упрямство» © Джейсон Стэтхем',
+    '«Я не ищу проблем, но если проблема находит меня — я готов» © Джейсон Стэтхем',
+    '«Никогда не сдавайся, даже когда всё против тебя» © Джейсон Стэтхем',
+    '«Лучшее оружие — это голова. Ну и пистолет, конечно» © Джейсон Стэтхем',
+    '«Главное — не размер, а то, как ты этим пользуешься» © Джейсон Стэтхем',
+    '«Я верю в тяжёлую работу и преданность делу» © Джейсон Стэтхем',
+  ],
+  en: [
+    '"I don\'t have talent — I have stubbornness" © Jason Statham',
+    '"I don\'t look for trouble, but if trouble finds me — I\'m ready" © Jason Statham',
+    '"Never give up, even when everything is against you" © Jason Statham',
+    '"The best weapon is the head. Well, and a pistol, of course" © Jason Statham',
+    '"What matters is not the size, but how you use it" © Jason Statham',
+    '"I believe in hard work and dedication" © Jason Statham',
+  ],
+};
+let quoteIndex = Math.floor(Math.random() * stathamQuotes.ru.length);
+const quoteEl = document.getElementById('heroQuote');
+function showQuote(){
+  if (quoteEl) quoteEl.textContent = stathamQuotes[lang][quoteIndex];
+}
+showQuote();
 setInterval(() => {
-  quoteIndex = (quoteIndex + 1) % stathamQuotes.length;
-  const el = document.getElementById('heroQuote');
-  if (el) el.textContent = stathamQuotes[quoteIndex];
-}, 300000);
+  quoteIndex = (quoteIndex + 1) % stathamQuotes.ru.length;
+  showQuote();
+}, 180000); // 3 минуты
 
 /* =========================================================================
    SHUTDOWN — triggered only by the tab actually closing, not idle time.
@@ -1928,6 +3068,10 @@ document.addEventListener('keydown', (e) => {
     e.target.closest('.option-row') || e.target.closest('.preview-wrap') ||
     e.target.closest('.volume-wrap');
   if (isUI && e.code === 'Space') {
+    // text fields must accept spaces — steal Space only from controls
+    const isTextEntry = tag === 'INPUT' &&
+      !['range', 'checkbox', 'radio', 'button', 'file', 'color', 'number'].includes(e.target.type);
+    if (isTextEntry) return;
     e.preventDefault();
     e.target.blur();
     return;
@@ -1979,17 +3123,17 @@ ffmpegInstallAutoBtn.addEventListener('click', async () => {
   ffmpegModalDismissBtn.hidden = true;
   ffmpegModalProgress.hidden = false;
   ffmpegModalProgressBar.style.width = '0%';
-  ffmpegModalProgressLabel.textContent = 'Запускаем установку…';
+  ffmpegModalProgressLabel.textContent = t('fm.prog.start');
   try {
     const startRes = await fetch('/api/ffmpeg/install/start', { method: 'POST' });
-    if (!startRes.ok) throw new Error('Не удалось запустить установку');
+    if (!startRes.ok) throw new Error(t('fm.err.start'));
     const { job_id } = await startRes.json();
 
     const startedAt = Date.now();
     const MAX_WAIT_MS = 5 * 60 * 1000; // 5 min safety net
     while (true) {
       if (Date.now() - startedAt > MAX_WAIT_MS) {
-        throw new Error('Превышено время ожидания установки.');
+        throw new Error(t('fm.err.timeout'));
       }
       await sleep(500);
       const progRes = await fetch('/api/ffmpeg/install/progress?id=' + encodeURIComponent(job_id));
@@ -2000,27 +3144,27 @@ ffmpegInstallAutoBtn.addEventListener('click', async () => {
         if (pct != null) {
           ffmpegModalProgressBar.style.width = pct + '%';
           ffmpegModalProgressLabel.textContent =
-            `Скачивание: ${pct.toFixed(0)}% (${formatFfmpegBytes(jobData.downloaded)} / ${formatFfmpegBytes(jobData.total)})`;
+            `${t('fm.prog.dl')}: ${pct.toFixed(0)}% (${formatFfmpegBytes(jobData.downloaded)} / ${formatFfmpegBytes(jobData.total)})`;
         } else {
           ffmpegModalProgressBar.style.width = '50%';
-          ffmpegModalProgressLabel.textContent = `Скачивание: ${formatFfmpegBytes(jobData.downloaded)}`;
+          ffmpegModalProgressLabel.textContent = `${t('fm.prog.dl')}: ${formatFfmpegBytes(jobData.downloaded)}`;
         }
       } else if (jobData.status === 'extracting') {
         ffmpegModalProgressBar.style.width = '95%';
-        ffmpegModalProgressLabel.textContent = 'Распаковка…';
+        ffmpegModalProgressLabel.textContent = t('fm.prog.unpack');
       } else if (jobData.status === 'finished') {
         ffmpegModalProgressBar.style.width = '100%';
-        ffmpegModalProgressLabel.textContent = 'Готово! FFmpeg установлен.';
+        ffmpegModalProgressLabel.textContent = t('fm.done');
         setTimeout(() => { ffmpegModalOverlay.hidden = true; }, 1200);
         break;
       } else if (jobData.status === 'error') {
-        throw new Error(jobData.error || 'Ошибка установки');
+        throw new Error(jobData.error || t('fm.err'));
       }
       // status === 'starting' → keep waiting
     }
   } catch (err) {
     ffmpegModalError.textContent = err.message;
-    ffmpegModalProgressLabel.textContent = 'Ошибка установки';
+    ffmpegModalProgressLabel.textContent = t('fm.err');
   } finally {
     ffmpegInstallAutoBtn.disabled = false;
     ffmpegInstallManualBtn.disabled = false;
@@ -2029,6 +3173,1593 @@ ffmpegInstallAutoBtn.addEventListener('click', async () => {
 });
 
 checkFfmpegOnStartup();
+
+/* =========================================================================
+   GIF MAKER — assemble uploaded images into an animated GIF via the
+   already-bundled ffmpeg.wasm (palettegen/paletteuse for quality).
+   The preview animates the frames at the chosen speed live.
+   ========================================================================= */
+const gifDropzone   = document.getElementById('gifDropzone');
+const gifFileInput  = document.getElementById('gifFileInput');
+const gifPickBtn    = document.getElementById('gifPickBtn');
+const gifDropError  = document.getElementById('gifDropError');
+const gifWorkspace  = document.getElementById('gifWorkspace');
+const gifPreviewCanvas = document.getElementById('gifPreviewCanvas');
+const gifPreviewVideo  = document.getElementById('gifPreviewVideo');
+const gifAnimImg    = document.getElementById('gifAnimImg');
+const gifPreviewName = document.getElementById('gifPreviewName');
+const gifPreviewInfo = document.getElementById('gifPreviewInfo');
+const gifFramesEl   = document.getElementById('gifFrames');
+const gifAddMoreBtn = document.getElementById('gifAddMoreBtn');
+const gifClearBtn   = document.getElementById('gifClearBtn');
+const gifFps        = document.getElementById('gifFps');
+const gifFpsVal     = document.getElementById('gifFpsVal');
+const gifScale      = document.getElementById('gifScale');
+const gifScaleVal   = document.getElementById('gifScaleVal');
+const gifLoop       = document.getElementById('gifLoop');
+const gifLoopVal    = document.getElementById('gifLoopVal');
+const gifVideoOpts  = document.getElementById('gifVideoOpts');
+const gifStart      = document.getElementById('gifStart');
+const gifStartVal   = document.getElementById('gifStartVal');
+const gifDur        = document.getElementById('gifDur');
+const gifDurVal     = document.getElementById('gifDurVal');
+const gifRotBtn     = document.getElementById('gifRotBtn');
+const gifFlipHBtn   = document.getElementById('gifFlipHBtn');
+const gifFlipVBtn   = document.getElementById('gifFlipVBtn');
+const gifRotLabel   = document.getElementById('gifRotLabel');
+const gifQualitySeg = document.getElementById('gifQualitySeg');
+const gifDitherMode = document.getElementById('gifDitherMode');
+const gifResultImg  = document.getElementById('gifResultImg');
+const gifCreateBtn  = document.getElementById('gifCreateBtn');
+const gifProgressWrap  = document.getElementById('gifProgressWrap');
+const gifProgressBar   = document.getElementById('gifProgressBar');
+const gifProgressLabel = document.getElementById('gifProgressLabel');
+const gifError      = document.getElementById('gifError');
+
+let gifFiles = [];   // source files, order = animation order
+let gifURLs = [];    // thumbnail object URLs
+let gifImgs = [];    // cached Image objects for the live preview
+let gifAnimTimer = null;
+let gifFrameIdx = 0;
+let gifVideo = null;  // {file, url} — video source mode
+let gifMode = 'frames'; // 'frames' | 'video'
+let gifColors = 128;  // palette size for video GIFs (quality preset)
+let gifResultURL = null;
+let gifSegRAF = null;
+let gifRot = 0;       // video rotation, degrees (0/90/180/270)
+let gifVH = false;    // video flip horizontal
+let gifVV = false;    // video flip vertical
+let gifVideoDur = 0;  // source video duration (s), for cross-clamping sliders
+
+function updateGifTimeLabels(){
+  gifStartVal.textContent = Number(gifStart.value).toFixed(1) + ' ' + t('gif.sec');
+  gifDurVal.textContent = Number(gifDur.value).toFixed(1) + ' ' + t('gif.sec');
+}
+
+function hideGifResult(){
+  if (gifResultURL) { URL.revokeObjectURL(gifResultURL); gifResultURL = null; }
+  gifResultImg.hidden = true;
+  if (gifMode === 'video' && gifVideo) gifPreviewVideo.hidden = false;
+}
+
+function clearGifVideo(){
+  if (!gifVideo) return;
+  URL.revokeObjectURL(gifVideo.url);
+  gifPreviewVideo.pause();
+  gifPreviewVideo.removeAttribute('src');
+  gifPreviewVideo.load();
+  gifVideo = null;
+  gifMode = 'frames';
+  gifPreviewVideo.style.transform = '';
+  gifAnimImg.hidden = true;
+  gifAnimImg.removeAttribute('src');
+  delete gifAnimImg.dataset.idx;
+  if (gifResultURL) { URL.revokeObjectURL(gifResultURL); gifResultURL = null; }
+  gifResultImg.hidden = true;
+  gifPreviewVideo.hidden = true;
+  gifPreviewCanvas.hidden = false;
+  gifFramesEl.hidden = false;
+  gifVideoOpts.hidden = true;
+}
+
+function setGifVideo(file){
+  clearGifVideo();
+  gifMode = 'video';
+  gifVideo = { file, url: URL.createObjectURL(file) };
+  const v = gifPreviewVideo;
+  v.onloadedmetadata = () => {
+    const d = v.duration || 0;
+    gifVideoDur = d;
+    gifStart.max = Math.max(0, d - 0.2).toFixed(1);
+    gifStart.value = 0;
+    gifDur.max = Math.min(15, Math.max(0.2, d)).toFixed(1);
+    gifDur.value = Math.min(3, Math.max(0.2, d)).toFixed(1);
+    updateGifTimeLabels();
+    startGifPreview();
+  };
+  v.src = gifVideo.url;
+  v.hidden = false;
+  gifPreviewCanvas.hidden = true;
+  gifFramesEl.hidden = true;
+  gifVideoOpts.hidden = false;
+  gifWorkspace.hidden = false;
+  gifDropzone.hidden = true;
+  gifPreviewName.textContent = `Видео: ${file.name}`;
+}
+
+function formatConvBytes(bytes){
+  if (bytes == null) return '?';
+  if (bytes >= 1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' МБ';
+  if (bytes >= 1024) return (bytes/1024).toFixed(0) + ' КБ';
+  return bytes + ' Б';
+}
+
+function convExtFor(mime){
+  return { 'image/png':'png', 'image/jpeg':'jpg', 'image/webp':'webp' }[mime] || 'img';
+}
+
+function addGifFiles(files){
+  gifDropError.textContent = '';
+  const vids = [...files].filter(f => f.type.startsWith('video/'));
+  const imgs = [...files].filter(f => f.type.startsWith('image/'));
+  if (vids.length) {
+    const hadFrames = gifFiles.length > 0;
+    clearFramesSilently();
+    setGifVideo(vids[0]);
+    if (hadFrames || imgs.length) {
+      gifDropError.textContent = t('gif.err.mix');
+    }
+    return;
+  }
+  if (gifVideo) clearGifVideo();
+  let added = 0;
+  for (const f of imgs) {
+    gifFiles.push(f);
+    gifURLs.push(URL.createObjectURL(f));
+    gifImgs.push(null);
+    added++;
+  }
+  if (!added) {
+    gifDropError.textContent = t('gif.err.noimg');
+    return;
+  }
+  renderGifFrames();
+  gifWorkspace.hidden = false;
+  gifDropzone.hidden = true;
+  startGifPreview();
+}
+
+function clearFramesSilently(){
+  gifFiles = [];
+  gifURLs.forEach(u => URL.revokeObjectURL(u));
+  gifURLs = [];
+  gifImgs = [];
+  gifFrameIdx = 0;
+  gifFramesEl.innerHTML = '';
+  gifAnimImg.hidden = true;
+  gifAnimImg.removeAttribute('src');
+  delete gifAnimImg.dataset.idx;
+  gifPreviewCanvas.hidden = false;
+  stopGifPreview();
+}
+
+function removeGifFrame(i){
+  URL.revokeObjectURL(gifURLs[i]);
+  gifFiles.splice(i, 1);
+  gifURLs.splice(i, 1);
+  gifImgs.splice(i, 1);
+  if (!gifFiles.length) { resetGifState(); return; }
+  renderGifFrames();
+  startGifPreview();
+}
+
+function moveGifFrame(i, dir){
+  const j = i + dir;
+  if (j < 0 || j >= gifFiles.length) return;
+  [gifFiles[i], gifFiles[j]] = [gifFiles[j], gifFiles[i]];
+  [gifURLs[i], gifURLs[j]] = [gifURLs[j], gifURLs[i]];
+  [gifImgs[i], gifImgs[j]] = [gifImgs[j], gifImgs[i]];
+  renderGifFrames();
+  startGifPreview();
+}
+
+function renderGifFrames(){
+  gifFramesEl.innerHTML = '';
+  gifFiles.forEach((f, i) => {
+    const el = document.createElement('div');
+    el.className = 'conv-thumb';
+    el.title = `${t('gif.frame')} ${i + 1}: ${f.name}`;
+    const im = document.createElement('img');
+    im.src = gifURLs[i];
+    im.alt = '';
+    el.append(im);
+    if (i > 0) {
+      const prev = document.createElement('button');
+      prev.type = 'button'; prev.className = 'b bl'; prev.textContent = '‹';
+      prev.title = t('gif.moveEarlier');
+      prev.addEventListener('click', (e) => { e.stopPropagation(); moveGifFrame(i, -1); });
+      el.append(prev);
+    }
+    if (i < gifFiles.length - 1) {
+      const next = document.createElement('button');
+      next.type = 'button'; next.className = 'b br'; next.textContent = '›';
+      next.title = t('gif.moveLater');
+      next.addEventListener('click', (e) => { e.stopPropagation(); moveGifFrame(i, 1); });
+      el.append(next);
+    }
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'b bb'; rm.textContent = '✕';
+    rm.title = t('gif.removeFrame');
+    rm.addEventListener('click', (e) => { e.stopPropagation(); removeGifFrame(i); });
+    el.append(rm);
+    const num = document.createElement('span');
+    num.className = 'gif-num';
+    num.textContent = i + 1;
+    el.append(num);
+    gifFramesEl.append(el);
+  });
+  gifPreviewName.textContent = gifFiles.length ? `${t('gif.anim')} · ${gifFiles.length} ${t('gif.frames')}` : '';
+}
+
+function gifLoadImage(i){
+  return new Promise((resolve, reject) => {
+    if (gifImgs[i]) { resolve(gifImgs[i]); return; }
+    const img = new Image();
+    img.onload = () => { gifImgs[i] = img; resolve(img); };
+    img.onerror = () => reject(new Error(`${t('gif.err.read')} ${gifFiles[i].name}`));
+    img.src = gifURLs[i];
+  });
+}
+
+/* ── Live preview: frames animate at the chosen speed; video loops its segment ── */
+function stopGifPreview(){
+  if (gifAnimTimer) { clearInterval(gifAnimTimer); gifAnimTimer = null; }
+  if (gifSegRAF) { cancelAnimationFrame(gifSegRAF); gifSegRAF = null; }
+}
+
+function startVideoSegPreview(){
+  const v = gifPreviewVideo;
+  if (!gifVideo || !v.duration) return;
+  const start = Math.max(0, Number(gifStart.value) || 0);
+  const dur = Math.max(0.2, Number(gifDur.value) || 3);
+  const end = start + dur;
+  // rotation/flips are visual here and go into the ffmpeg filter chain on build
+  v.style.transform = `rotate(${gifRot}deg) scaleX(${gifVH ? -1 : 1}) scaleY(${gifVV ? -1 : 1})`;
+  if (Math.abs(v.currentTime - start) > 0.05) v.currentTime = start;
+  v.play().catch(() => {});
+  // rAF loop — much smoother segment looping than the coarse `timeupdate`
+  if (gifSegRAF) cancelAnimationFrame(gifSegRAF);
+  const tick = () => {
+    if (!gifVideo) { gifSegRAF = null; return; }
+    if (v.currentTime >= end - 0.02 || v.currentTime < start - 0.1) v.currentTime = start;
+    gifSegRAF = requestAnimationFrame(tick);
+  };
+  gifSegRAF = requestAnimationFrame(tick);
+  const fps = Math.max(1, Number(gifFps.value) || 10);
+  const scalePct = Math.min(100, Math.max(10, Number(gifScale.value) || 100)) / 100;
+  const vw = v.videoWidth || 480, vh = v.videoHeight || 360;
+  const swap = gifRot === 90 || gifRot === 270;
+  const w = Math.max(2, Math.round((swap ? vh : vw) * scalePct / 2) * 2);
+  const h = Math.max(2, Math.round((swap ? vw : vh) * scalePct / 2) * 2);
+  const frames = Math.max(1, Math.round(dur * fps));
+  gifPreviewInfo.textContent = `${t('gif.frag')} ${start.toFixed(1)}–${end.toFixed(1)} ${t('gif.sec')} · ${frames} ${t('gif.frames')} · ${fps} ${t('gif.fps')} · ${w}×${h}`;
+}
+
+function startGifPreview(){
+  stopGifPreview();
+  if (gifMode === 'video') { startVideoSegPreview(); return; }
+  if (!gifFiles.length) return;
+  const fps = Math.max(1, Number(gifFps.value) || 10);
+  const scalePct = Math.min(100, Math.max(10, Number(gifScale.value) || 100)) / 100;
+  // Load EVERY frame up front — otherwise the loop below keeps drawing
+  // the only loaded frame and the preview looks frozen.
+  Promise.all(gifFiles.map((_, i) => gifLoadImage(i))).then(() => {
+    if (!gifFiles.length) return;
+    const first = gifImgs[0];
+    const w = Math.max(1, Math.round(first.naturalWidth * scalePct));
+    const h = Math.max(1, Math.round(first.naturalHeight * scalePct));
+    const cap = Math.min(1, 900 / Math.max(w, h));
+    gifPreviewCanvas.width = Math.max(1, Math.round(w * cap));
+    gifPreviewCanvas.height = Math.max(1, Math.round(h * cap));
+    const ctx = gifPreviewCanvas.getContext('2d');
+    const draw = () => {
+      if (!gifFiles.length) { stopGifPreview(); return; }
+      const idx = gifFrameIdx % gifFiles.length;
+      const f = gifFiles[idx];
+      if (f.type === 'image/gif') {
+        // browsers animate GIFs inside <img>; canvas can only grab frame 1
+        gifPreviewCanvas.hidden = true;
+        gifAnimImg.hidden = false;
+        if (gifAnimImg.dataset.idx !== String(idx)) {
+          gifAnimImg.src = gifURLs[idx];
+          gifAnimImg.dataset.idx = String(idx);
+        }
+      } else {
+        gifAnimImg.hidden = true;
+        gifPreviewCanvas.hidden = false;
+        const img = gifImgs[idx];
+        if (img) {
+          ctx.clearRect(0, 0, gifPreviewCanvas.width, gifPreviewCanvas.height);
+          ctx.drawImage(img, 0, 0, gifPreviewCanvas.width, gifPreviewCanvas.height);
+        }
+      }
+      gifFrameIdx++;
+    };
+    draw();
+    gifAnimTimer = setInterval(draw, 1000 / fps);
+    gifPreviewInfo.textContent = `${gifFiles.length} ${t('gif.frames')} · ${fps} ${t('gif.fps')} · ${w}×${h}`;
+  }).catch(err => { gifPreviewInfo.textContent = err.message; });
+}
+
+/* ── Assemble the GIF ── */
+async function createGif(){
+  if (gifMode === 'video' && gifVideo) { await createGifFromVideo(); return; }
+  if (!gifFiles.length) return;
+  gifError.textContent = '';
+  gifCreateBtn.disabled = true;
+  gifProgressWrap.hidden = false;
+  gifProgressBar.style.width = '15%';
+  try {
+    gifProgressLabel.textContent = t('gif.prog.ffmpeg');
+    await ensureFFmpegLoaded();
+    gifProgressBar.style.width = '35%';
+
+    gifProgressLabel.textContent = t('gif.prog.prep');
+    const scalePct = Math.min(100, Math.max(10, Number(gifScale.value) || 100)) / 100;
+    const names = [];
+    let firstDims = null;
+    for (let i = 0; i < gifFiles.length; i++) {
+      const img = await gifLoadImage(i);
+      const w = Math.max(1, Math.round(img.naturalWidth * scalePct));
+      const h = Math.max(1, Math.round(img.naturalHeight * scalePct));
+      if (!firstDims) firstDims = { w, h };
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      const data = new Uint8Array(await blob.arrayBuffer());
+      const name = `frame${String(i).padStart(4, '0')}.png`;
+      await ffmpeg.writeFile(name, data);
+      names.push(name);
+    }
+    gifProgressBar.style.width = '65%';
+
+    gifProgressLabel.textContent = t('gif.prog.build');
+    const fps = Math.max(1, Number(gifFps.value) || 10);
+    const loop = Math.max(0, Number(gifLoop.value) || 0);
+    const dither = gifDitherMode.value;
+    let gifLastLog = '';
+    const onLogGif = ({ message }) => { if (message) gifLastLog = message; };
+    ffmpeg.on('log', onLogGif);
+    let rc;
+    try {
+      rc = await ffmpeg.exec([
+        '-framerate', String(fps),
+        '-i', 'frame%04d.png',
+        '-vf', `split[a][b];[a]palettegen=max_colors=256[p];[b][p]paletteuse=dither=${dither}`,
+        '-loop', String(loop),
+        'out.gif',
+      ]);
+    } finally {
+      ffmpeg.off('log', onLogGif);
+    }
+    if (rc !== 0) throw new Error(`${t('gif.err.build')}: ${gifLastLog || 'ffmpeg exit ' + rc}`);
+    gifProgressBar.style.width = '100%';
+
+    const data = await ffmpeg.readFile('out.gif');
+    if (data.byteLength < 100) throw new Error('GIF пустой — сборка не удалась');
+    const blob = new Blob([data], { type: 'image/gif' });
+    const base = gifFiles[0].name.replace(/\.[^.]+$/, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${base}_mtools.gif`;
+    a.click();
+    setTimeout((u) => URL.revokeObjectURL(u), 5000, a.href);
+    gifProgressLabel.textContent = t('gif.done');
+    gifPreviewInfo.textContent = `${names.length} ${t('gif.frames')} · ${firstDims.w}×${firstDims.h} · ${formatConvBytes(blob.size)}`;
+    for (const n of names) { try { await ffmpeg.deleteFile(n); } catch (e) {} }
+    try { await ffmpeg.deleteFile('out.gif'); } catch (e) {}
+    setTimeout(() => { gifProgressWrap.hidden = true; }, 1500);
+  } catch (err) {
+    gifError.textContent = err.message;
+    gifProgressLabel.textContent = 'Ошибка';
+    gifProgressBar.style.width = '0%';
+  } finally {
+    gifCreateBtn.disabled = false;
+  }
+}
+
+function resetGifState(){
+  stopGifPreview();
+  clearGifVideo();
+  gifRot = 0;
+  gifVH = false;
+  gifVV = false;
+  gifRotLabel.textContent = '0°';
+  gifFlipHBtn.classList.remove('active');
+  gifFlipVBtn.classList.remove('active');
+  clearFramesSilently();
+  gifPreviewCanvas.width = 0;
+  gifPreviewCanvas.height = 0;
+  gifPreviewInfo.textContent = '';
+  gifWorkspace.hidden = true;
+  gifDropzone.hidden = false;
+  gifFileInput.value = '';
+  gifDropError.textContent = '';
+  gifError.textContent = '';
+  gifProgressWrap.hidden = true;
+}
+
+/* ── Video → GIF ── */
+async function createGifFromVideo(){
+  gifError.textContent = '';
+  gifCreateBtn.disabled = true;
+  gifProgressWrap.hidden = false;
+  gifProgressBar.style.width = '10%';
+  try {
+    gifProgressLabel.textContent = t('gif.prog.ffmpeg');
+    await ensureFFmpegLoaded();
+    gifProgressBar.style.width = '30%';
+
+    gifProgressLabel.textContent = t('gif.prog.loadvideo');
+    // Read the video in chunks so the loading bar actually reflects progress
+    const fsize = gifVideo.file.size;
+    const total = new Uint8Array(fsize);
+    let loaded = 0;
+    while (loaded < fsize) {
+      const end = Math.min(fsize, loaded + 8 * 1024 * 1024);
+      const buf = await gifVideo.file.slice(loaded, end).arrayBuffer();
+      total.set(new Uint8Array(buf), loaded);
+      loaded = end;
+      gifProgressBar.style.width = (5 + Math.round((loaded / fsize) * 25)) + '%';
+    }
+    await ffmpeg.writeFile('input_video', total);
+    gifProgressBar.style.width = '55%';
+
+    gifProgressLabel.textContent = t('gif.prog.build');
+    const v = gifPreviewVideo;
+    const start = Math.max(0, Number(gifStart.value) || 0);
+    const dur = Math.max(0.2, Number(gifDur.value) || 3);
+    const fps = Math.max(1, Number(gifFps.value) || 10);
+    const scalePct = Math.min(100, Math.max(10, Number(gifScale.value) || 100)) / 100;
+    const loop = Math.max(0, Number(gifLoop.value) || 0);
+    const dither = gifDitherMode.value;
+    const swap = gifRot === 90 || gifRot === 270;
+    const vw = v.videoWidth || 480, vh = v.videoHeight || 360;
+    const w = Math.max(2, Math.round((swap ? vh : vw) * scalePct / 2) * 2);
+    const h = Math.max(2, Math.round((swap ? vw : vh) * scalePct / 2) * 2);
+    // rotation/flips go into the filter chain so the exported GIF matches the preview
+    const geo = [];
+    if (gifRot === 90) geo.push('transpose=1');
+    else if (gifRot === 270) geo.push('transpose=2');
+    else if (gifRot === 180) geo.push('hflip,vflip');
+    if (gifVH) geo.push('hflip');
+    if (gifVV) geo.push('vflip');
+    let gifLastLog = '';
+    const onLogGif = ({ message }) => { if (message) gifLastLog = message; };
+    const onProg = ({ progress }) => {
+      if (typeof progress === 'number' && progress >= 0 && progress <= 1) {
+        gifProgressBar.style.width = (55 + Math.round(progress * 44)) + '%';
+        gifProgressLabel.textContent = `${t('gif.prog.build')} ${Math.round(progress * 100)}%`;
+      }
+    };
+    ffmpeg.on('progress', onProg);
+    ffmpeg.on('log', onLogGif);
+    let rc;
+    try {
+      rc = await ffmpeg.exec([
+        '-ss', String(start),
+        '-i', 'input_video',
+        '-t', String(dur),
+        '-vf', `${geo.length ? geo.join(',') + ',' : ''}fps=${fps},scale=${w}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${gifColors}[p];[b][p]paletteuse=dither=${dither}`,
+        '-loop', String(loop),
+        'out.gif',
+      ]);
+    } finally {
+      ffmpeg.off('progress', onProg);
+      ffmpeg.off('log', onLogGif);
+    }
+    if (rc !== 0) throw new Error(`${t('gif.err.build')}: ${gifLastLog || 'ffmpeg exit ' + rc}`);
+    gifProgressBar.style.width = '100%';
+
+    const data = await ffmpeg.readFile('out.gif');
+    if (data.byteLength < 100) throw new Error('GIF пустой — сборка не удалась');
+    const blob = new Blob([data], { type: 'image/gif' });
+    if (blob.size > 80 * 1024 * 1024) {
+      gifError.textContent = t('gif.warn.big');
+    }
+    const base = gifVideo.file.name.replace(/\.[^.]+$/, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${base}_mtools.gif`;
+    a.click();
+    setTimeout((u) => URL.revokeObjectURL(u), 5000, a.href);
+    if (gifResultURL) URL.revokeObjectURL(gifResultURL);
+    gifResultURL = URL.createObjectURL(blob);
+    gifPreviewVideo.hidden = true;
+    gifResultImg.src = gifResultURL;
+    gifResultImg.hidden = false;
+    gifProgressLabel.textContent = t('gif.done');
+    gifPreviewInfo.textContent = `${dur.toFixed(1)} ${t('gif.sec')} · ${fps} ${t('gif.fps')} · ${w}×${h} · ${formatConvBytes(blob.size)}`;
+    try { await ffmpeg.deleteFile('input_video'); } catch (e) {}
+    try { await ffmpeg.deleteFile('out.gif'); } catch (e) {}
+    setTimeout(() => { gifProgressWrap.hidden = true; }, 1500);
+  } catch (err) {
+    gifError.textContent = err.message;
+    gifProgressLabel.textContent = 'Ошибка';
+    gifProgressBar.style.width = '0%';
+  } finally {
+    gifCreateBtn.disabled = false;
+  }
+}
+
+gifPickBtn.addEventListener('click', (e) => { e.stopPropagation(); gifFileInput.click(); });
+gifDropzone.addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  gifFileInput.click();
+});
+['dragenter','dragover'].forEach(ev => gifDropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); gifDropzone.classList.add('drag-over');
+}));
+['dragleave','drop'].forEach(ev => gifDropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); gifDropzone.classList.remove('drag-over');
+}));
+gifDropzone.addEventListener('drop', (e) => addGifFiles([...e.dataTransfer.files]));
+gifFileInput.addEventListener('change', (e) => addGifFiles([...e.target.files]));
+
+gifFps.addEventListener('input', () => {
+  gifFpsVal.textContent = gifFps.value + ' ' + t('gif.fps');
+  startGifPreview();
+});
+gifScale.addEventListener('input', () => {
+  gifScaleVal.textContent = gifScale.value + '%';
+  startGifPreview();
+});
+gifStart.addEventListener('input', () => {
+  // keep start + duration inside the video, or ffmpeg hits EOF and fails
+  const vd = gifVideoDur || 0;
+  let s = Number(gifStart.value) || 0;
+  s = Math.min(s, Math.max(0, vd - Number(gifDur.value)));
+  gifStart.value = s.toFixed(1);
+  gifDur.max = Math.max(0.2, Math.min(15, vd - s)).toFixed(1);
+  updateGifTimeLabels();
+  hideGifResult();
+  startVideoSegPreview();
+});
+gifDur.addEventListener('input', () => {
+  const vd = gifVideoDur || 0;
+  let d = Number(gifDur.value) || 3;
+  d = Math.min(d, Math.max(0.2, vd - Number(gifStart.value)), 15);
+  gifDur.value = d.toFixed(1);
+  gifStart.max = Math.max(0, vd - d).toFixed(1);
+  updateGifTimeLabels();
+  hideGifResult();
+  startVideoSegPreview();
+});
+gifQualitySeg.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-q]');
+  if (!b) return;
+  gifQualitySeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  gifColors = { low: 64, med: 128, high: 256 }[b.dataset.q] || 128;
+  hideGifResult();
+});
+gifDitherMode.addEventListener('change', () => hideGifResult());
+gifRotBtn.addEventListener('click', () => {
+  gifRot = (gifRot + 90) % 360;
+  gifRotLabel.textContent = gifRot + '°';
+  hideGifResult();
+  startVideoSegPreview();
+});
+gifFlipHBtn.addEventListener('click', () => {
+  gifVH = !gifVH;
+  gifFlipHBtn.classList.toggle('active', gifVH);
+  hideGifResult();
+  startVideoSegPreview();
+});
+gifFlipVBtn.addEventListener('click', () => {
+  gifVV = !gifVV;
+  gifFlipVBtn.classList.toggle('active', gifVV);
+  hideGifResult();
+  startVideoSegPreview();
+});
+gifLoop.addEventListener('input', () => {
+  gifLoopVal.textContent = Number(gifLoop.value) === 0 ? '∞' : gifLoop.value;
+});
+gifCreateBtn.addEventListener('click', createGif);
+gifAddMoreBtn.addEventListener('click', () => gifFileInput.click());
+gifClearBtn.addEventListener('click', resetGifState);
+
+/* =========================================================================
+   IMAGE EDITOR — crop / adjust / export with a live preview.
+   Geometry (rotate/flip) and crop are baked into the base image on demand;
+   adjustments (brightness/contrast/...) stay live and are applied at
+   render time via ctx.filter — so every slider move is instantly visible.
+   ========================================================================= */
+const edDropzone = document.getElementById('edDropzone');
+const edFileInput = document.getElementById('edFileInput');
+const edPickBtn = document.getElementById('edPickBtn');
+const edError = document.getElementById('edError');
+const edWorkspace = document.getElementById('edWorkspace');
+const edStage = document.getElementById('edStage');
+const edCanvas = document.getElementById('edCanvas');
+const edCropOverlay = document.getElementById('edCropOverlay');
+const edCropRectEl = document.getElementById('edCropRect');
+const edCropActions = document.getElementById('edCropActions');
+const edCropDims = document.getElementById('edCropDims');
+const edCropBtn = document.getElementById('edCropBtn');
+const edCropApplyBtn = document.getElementById('edCropApply');
+const edCropCancelBtn = document.getElementById('edCropCancel');
+const edFileName = document.getElementById('edFileName');
+const edInfo = document.getElementById('edInfo');
+const edRotateBtn = document.getElementById('edRotateBtn');
+const edFlipHBtn = document.getElementById('edFlipHBtn');
+const edFlipVBtn = document.getElementById('edFlipVBtn');
+const edResetBtn = document.getElementById('edResetBtn');
+const edScale = document.getElementById('edScale');
+const edScaleVal = document.getElementById('edScaleVal');
+const edWarm = document.getElementById('edWarm');
+const edWarmVal = document.getElementById('edWarmVal');
+const edAspectSeg = document.getElementById('edAspectSeg');
+const edVig = document.getElementById('edVig');
+const edVigVal = document.getElementById('edVigVal');
+const edRad = document.getElementById('edRad');
+const edRadVal = document.getElementById('edRadVal');
+const edTextAdd = document.getElementById('edTextAdd');
+const edTextControls = document.getElementById('edTextControls');
+const edTextInput = document.getElementById('edTextInput');
+const edTextSize = document.getElementById('edTextSize');
+const edTextSizeVal = document.getElementById('edTextSizeVal');
+const edTextColor = document.getElementById('edTextColor');
+const edTextDel = document.getElementById('edTextDel');
+const edCompareBtn = document.getElementById('edCompareBtn');
+const edFormatSeg = document.getElementById('edFormatSeg');
+const edQualityWrap = document.getElementById('edQualityWrap');
+const edQuality = document.getElementById('edQuality');
+const edQualityVal = document.getElementById('edQualityVal');
+const edSaveBtn = document.getElementById('edSaveBtn');
+
+const ED_DEFAULTS = { brightness:100, contrast:100, saturate:100, hue:0, blur:0, gray:false, sepia:false, invert:false };
+const ED_PRESETS = {
+  reset:   { ...ED_DEFAULTS },
+  bw:      { ...ED_DEFAULTS, gray:true },
+  sepia:   { ...ED_DEFAULTS, sepia:true },
+  cold:    { ...ED_DEFAULTS, hue:-15, saturate:110, brightness:102 },
+  warm:    { ...ED_DEFAULTS, hue:12, saturate:118, brightness:103 },
+  vintage: { ...ED_DEFAULTS, sepia:true, hue:-15, contrast:92, brightness:106 },
+  noir:    { ...ED_DEFAULTS, gray:true, contrast:132, brightness:92 },
+  chrome:  { ...ED_DEFAULTS, saturate:150, contrast:110 },
+  invert:  { ...ED_DEFAULTS, invert:true },
+};
+const edState = { rot:0, flipH:false, flipV:false, warm:0, vig:0, adj:{ ...ED_DEFAULTS }, format:'image/png', quality:92 };
+let edBase = null;      // canvas with the base image (crop/geometry baked on demand)
+let edOriginal = null;  // untouched copy for the "compare with original" hold
+let edName = '';
+let edFile = null;      // original file — for the "before" size in the info line
+let edFileSize = null;
+let edEstSize = null;   // estimated output size (debounced re-encode)
+let edEstTimer = null;
+let edCropMode = false;
+let edCrop = null;      // relative crop rect {x,y,w,h}, 0..1
+let edCropDrag = null;
+let edTexts = [];       // {text, x, y, size, color} — positions relative 0..1
+let edSelText = -1;
+let edCompare = false;
+let edTextDrag = null;
+
+const edSliders = [
+  { el: document.getElementById('edBright'),   val: document.getElementById('edBrightVal'),   key:'brightness', def:100, fmt:v => v + '%' },
+  { el: document.getElementById('edContrast'), val: document.getElementById('edContrastVal'), key:'contrast',   def:100, fmt:v => v + '%' },
+  { el: document.getElementById('edSaturate'), val: document.getElementById('edSaturateVal'), key:'saturate',   def:100, fmt:v => v + '%' },
+  { el: document.getElementById('edHue'),      val: document.getElementById('edHueVal'),      key:'hue',        def:0,   fmt:v => v + '°' },
+  { el: document.getElementById('edBlur'),     val: document.getElementById('edBlurVal'),     key:'blur',       def:0,   fmt:v => v },
+];
+
+function edFilterString(){
+  const a = edState.adj;
+  let f = `brightness(${a.brightness}%) contrast(${a.contrast}%) saturate(${a.saturate}%) hue-rotate(${a.hue}deg)`;
+  if (a.blur > 0) f += ` blur(${a.blur}px)`;
+  if (a.gray) f += ' grayscale(1)';
+  if (a.sepia) f += ' sepia(1)';
+  if (a.invert) f += ' invert(1)';
+  return f;
+}
+
+/* Warmth is a tint overlay (soft-light) rather than a canvas filter */
+function edApplyWarmth(ctx, W, H){
+  const wm = edState.warm || 0;
+  if (!wm) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.fillStyle = wm > 0 ? '#ff8a00' : '#0080ff';
+  ctx.globalAlpha = Math.min(0.6, Math.abs(wm) / 80);
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+function edApplyVignette(ctx, W, H){
+  const v = edState.vig || 0;
+  if (!v) return;
+  const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H) * 0.42, W/2, H/2, Math.max(W,H) * 0.72);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, `rgba(0,0,0,${(v / 100) * 0.85})`);
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+function edRoundRectPath(ctx, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function edDrawTexts(ctx, W, H, cap, forExport){
+  if (!edTexts.length) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  edTexts.forEach((it, i) => {
+    // size is a % of the ORIGINAL image height — the scale slider must not
+    // resize existing text
+    const fs = Math.max(8, (it.size / 100) * edBase.height * cap);
+    ctx.font = `600 ${fs}px "Space Grotesk", "Inter", sans-serif`;
+    ctx.globalAlpha = it.opacity != null ? it.opacity : 1;
+    if (it.stroke) {
+      ctx.lineWidth = Math.max(1.5, fs * 0.08);
+      ctx.strokeStyle = 'rgba(0,0,0,.85)';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(it.text, it.x * W, it.y * H);
+    }
+    ctx.fillStyle = it.color;
+    ctx.shadowColor = 'rgba(0,0,0,.45)';
+    ctx.shadowBlur = fs * 0.1;
+    ctx.fillText(it.text, it.x * W, it.y * H);
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = 1;
+    if (!forExport && i === edSelText) {
+      const tw = ctx.measureText(it.text || ' ').width;
+      ctx.strokeStyle = 'rgba(110,231,209,.9)';
+      ctx.lineWidth = Math.max(1, fs * 0.04);
+      ctx.setLineDash([fs * 0.18, fs * 0.12]);
+      ctx.strokeRect(it.x * W - tw / 2 - fs * 0.25, it.y * H - fs * 0.7, tw + fs * 0.5, fs * 1.4);
+      ctx.setLineDash([]);
+    }
+  });
+  ctx.restore();
+}
+
+/* Single paint pipeline shared by the preview, size estimate and export */
+function edPaint(ctx, W, H, cap, forExport){
+  const { w, h } = edDims();
+  const rad = Math.min(50, Math.max(0, Number(edRad.value) || 0));
+  ctx.save();
+  if (rad > 0) {
+    edRoundRectPath(ctx, 0, 0, W, H, Math.min(W, H) * rad / 100);
+    ctx.clip();
+  }
+  if (edCompare && edOriginal && !forExport) {
+    // hold-to-compare: show the untouched original
+    const s = Math.min(W / edOriginal.width, H / edOriginal.height);
+    ctx.drawImage(edOriginal, (W - edOriginal.width * s) / 2, (H - edOriginal.height * s) / 2, edOriginal.width * s, edOriginal.height * s);
+    ctx.restore();
+    return;
+  }
+  if (edState.format === 'image/jpeg') {
+    // JPEG has no alpha — rounded corners need a solid backdrop
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.save();
+  ctx.filter = edFilterString();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(edState.rot * Math.PI / 180);
+  ctx.scale((edState.flipH ? -1 : 1) * cap, (edState.flipV ? -1 : 1) * cap);
+  ctx.drawImage(edBase, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  edApplyWarmth(ctx, W, H);
+  edApplyVignette(ctx, W, H);
+  edDrawTexts(ctx, W, H, cap, forExport);
+  ctx.restore();
+}
+
+function edDims(){
+  const scalePct = Math.min(200, Math.max(10, Number(edScale.value) || 100)) / 100;
+  const w = Math.max(1, Math.round(edBase.width * scalePct));
+  const h = Math.max(1, Math.round(edBase.height * scalePct));
+  const swap = edState.rot === 90 || edState.rot === 270;
+  return { w, h, W: swap ? h : w, H: swap ? w : h };
+}
+
+function updateEdInfo(){
+  if (!edBase) return;
+  const { W, H } = edDims();
+  let info = `${W}×${H} px`;
+  if (edFileSize != null) {
+    info += ` · ${formatConvBytes(edFileSize)}`;
+    if (edEstSize != null) {
+      const diff = edEstSize - edFileSize;
+      const pct = edFileSize ? Math.round(diff / edFileSize * 100) : 0;
+      info += ` → ≈ ${formatConvBytes(edEstSize)} (${diff <= 0 ? '' : '+'}${pct}%)`;
+    }
+    info += ` · ${convExtFor(edState.format).toUpperCase()}`;
+  }
+  edInfo.textContent = info;
+}
+
+/* Re-encode the full-res result in the background to estimate the output
+   file size — debounced, so slider drags don't thrash the encoder. */
+function scheduleEdEstimate(){
+  clearTimeout(edEstTimer);
+  edEstSize = null;
+  updateEdInfo();
+  edEstTimer = setTimeout(async () => {
+    if (!edBase) return;
+    try {
+      const { W, H } = edDims();
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      edPaint(c.getContext('2d'), W, H, 1, true);
+      const mime = edState.format;
+      const q = mime !== 'image/png' ? edState.quality / 100 : undefined;
+      const blob = await new Promise(res => c.toBlob(res, mime, q));
+      if (!blob || !edBase) return;
+      edEstSize = blob.size;
+      updateEdInfo();
+    } catch (e) { /* estimation is best-effort */ }
+  }, 400);
+}
+
+function edRender(){
+  if (!edBase) return;
+  const { W, H } = edDims();
+  const cap = Math.min(1, 1800 / Math.max(W, H)); // cap preview canvas for speed
+  edCanvas.width = Math.max(1, Math.round(W * cap));
+  edCanvas.height = Math.max(1, Math.round(H * cap));
+  edPaint(edCanvas.getContext('2d'), edCanvas.width, edCanvas.height, cap, false);
+  updateEdInfo();
+  scheduleEdEstimate();
+  edSyncOverlay();
+}
+
+function edOpenFile(file){
+  if (!file.type.startsWith('image/')) {
+    edError.textContent = t('ed.err.notimg');
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    edBase = c;
+    edOriginal = document.createElement('canvas');
+    edOriginal.width = c.width;
+    edOriginal.height = c.height;
+    edOriginal.getContext('2d').drawImage(c, 0, 0);
+    edTexts = [];
+    edSelText = -1;
+    edTextControls.hidden = true;
+    edCompare = false;
+    edName = file.name;
+    edFile = file;
+    edFileSize = file.size;
+    edEstSize = null;
+    edState.rot = 0; edState.flipH = false; edState.flipV = false;
+    edState.vig = 0;
+    edVig.value = 0; edVigVal.textContent = '0';
+    edRad.value = 0; edRadVal.textContent = '0%';
+    edFlipHBtn.classList.remove('active');
+    edFlipVBtn.classList.remove('active');
+    edFileName.textContent = file.name;
+    edError.textContent = '';
+    exitCropMode();
+    edWorkspace.hidden = false;
+    edDropzone.hidden = true;
+    edZoomBadge.hidden = false;
+    resetEdZoom();
+    edRender();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    edError.textContent = t('ed.err.read');
+  };
+  img.src = url;
+}
+
+/* ── Crop ── */
+function enterCropMode(){
+  edCropMode = true;
+  edCrop = null;
+  edCropActions.hidden = false;
+  edCropBtn.classList.add('active');
+  resetEdZoom();            // crop coords assume the untransformed canvas
+  edZoomBadge.hidden = true;
+  edSyncOverlay();
+}
+function exitCropMode(){
+  edCropMode = false;
+  edCrop = null;
+  edCropDrag = null;
+  edCropActions.hidden = true;
+  edCropRectEl.style.display = 'none';
+  edCropBtn.classList.remove('active');
+  edCropOverlay.hidden = true;
+  if (edBase) edZoomBadge.hidden = false;
+}
+edCropBtn.addEventListener('click', () => { edCropMode ? exitCropMode() : enterCropMode(); });
+edCropCancelBtn.addEventListener('click', exitCropMode);
+
+function edSyncOverlay(){
+  if (!edCropMode || !edBase) { edCropOverlay.hidden = true; return; }
+  edCropOverlay.hidden = false;
+  edCropOverlay.style.left = edCanvas.offsetLeft + 'px';
+  edCropOverlay.style.top = edCanvas.offsetTop + 'px';
+  edCropOverlay.style.width = edCanvas.clientWidth + 'px';
+  edCropOverlay.style.height = edCanvas.clientHeight + 'px';
+  edDrawCropRect();
+}
+
+function edDrawCropRect(){
+  if (!edCrop || edCrop.w < 0.005 || edCrop.h < 0.005) {
+    edCropRectEl.style.display = 'none';
+    edCropDims.textContent = '';
+    return;
+  }
+  edCropRectEl.style.display = 'block';
+  edCropRectEl.style.left = (edCrop.x * 100) + '%';
+  edCropRectEl.style.top = (edCrop.y * 100) + '%';
+  edCropRectEl.style.width = (edCrop.w * 100) + '%';
+  edCropRectEl.style.height = (edCrop.h * 100) + '%';
+  const { W, H } = edDims();
+  edCropDims.textContent = `${Math.round(edCrop.w * W)}×${Math.round(edCrop.h * H)} px`;
+}
+
+function edRelPoint(e){
+  const r = edCropOverlay.getBoundingClientRect();
+  return {
+    x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+    y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+  };
+}
+
+edCropOverlay.addEventListener('pointerdown', (e) => {
+  if (!edBase) return;
+  e.preventDefault();
+  edCropOverlay.setPointerCapture(e.pointerId);
+  const p = edRelPoint(e);
+  const handle = e.target.classList && e.target.classList.contains('ed-handle') ? e.target.dataset.h : null;
+  if (handle) {
+    edCropDrag = { type:'resize', handle, orig:{ ...edCrop } };
+  } else if (edCrop && p.x >= edCrop.x && p.x <= edCrop.x + edCrop.w && p.y >= edCrop.y && p.y <= edCrop.y + edCrop.h) {
+    edCropDrag = { type:'move', start:p, orig:{ ...edCrop } };
+  } else {
+    edCrop = { x:p.x, y:p.y, w:0, h:0 };
+    edCropDrag = { type:'draw', start:p };
+  }
+});
+
+edCropOverlay.addEventListener('pointermove', (e) => {
+  if (!edCropDrag || !edCrop) return;
+  const p = edRelPoint(e);
+  if (edCropDrag.type === 'draw') {
+    edCrop.w = p.x - edCrop.x;
+    edCrop.h = p.y - edCrop.y;
+    if (edCrop.w < 0) { edCrop.x = p.x; edCrop.w = -edCrop.w; }
+    if (edCrop.h < 0) { edCrop.y = p.y; edCrop.h = -edCrop.h; }
+  } else if (edCropDrag.type === 'move') {
+    edCrop.x = Math.min(1 - edCrop.w, Math.max(0, edCropDrag.orig.x + (p.x - edCropDrag.start.x)));
+    edCrop.y = Math.min(1 - edCrop.h, Math.max(0, edCropDrag.orig.y + (p.y - edCropDrag.start.y)));
+  } else {
+    const o = edCropDrag.orig, h = edCropDrag.handle;
+    let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
+    if (h.includes('w')) x1 = p.x;
+    if (h.includes('e')) x2 = p.x;
+    if (h.includes('n')) y1 = p.y;
+    if (h.includes('s')) y2 = p.y;
+    edCrop = { x:Math.min(x1,x2), y:Math.min(y1,y2), w:Math.abs(x2-x1), h:Math.abs(y2-y1) };
+  }
+  if (edCropDrag.type === 'move') {
+    edCrop.w = Math.min(edCrop.w, 1 - edCrop.x);
+    edCrop.h = Math.min(edCrop.h, 1 - edCrop.y);
+  } else if (edCropAspect) {
+    edCrop.w = Math.min(edCrop.w, 1 - edCrop.x);
+    edCrop.h = edCrop.w / edCropAspect;
+    if (edCrop.y + edCrop.h > 1) { edCrop.h = 1 - edCrop.y; edCrop.w = edCrop.h * edCropAspect; }
+  } else {
+    edCrop.w = Math.min(edCrop.w, 1 - edCrop.x);
+    edCrop.h = Math.min(edCrop.h, 1 - edCrop.y);
+  }
+  edDrawCropRect();
+});
+
+window.addEventListener('pointerup', () => {
+  if (edCropDrag && edCropDrag.type === 'draw' && edCrop && (edCrop.w < 0.01 || edCrop.h < 0.01)) {
+    edCrop = null;
+    edDrawCropRect();
+  }
+  edCropDrag = null;
+});
+
+function edApplyCrop(){
+  if (!edCrop || edCrop.w < 0.01 || edCrop.h < 0.01) return;
+  const { w, h, W, H } = edDims();
+  const full = document.createElement('canvas');
+  full.width = W; full.height = H;
+  const ctx = full.getContext('2d');
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(edState.rot * Math.PI / 180);
+  ctx.scale(edState.flipH ? -1 : 1, edState.flipV ? -1 : 1);
+  ctx.drawImage(edBase, -w / 2, -h / 2, w, h);
+  const sx = Math.round(edCrop.x * W), sy = Math.round(edCrop.y * H);
+  const sw = Math.max(1, Math.round(edCrop.w * W)), sh = Math.max(1, Math.round(edCrop.h * H));
+  const out = document.createElement('canvas');
+  out.width = sw; out.height = sh;
+  out.getContext('2d').drawImage(full, sx, sy, sw, sh, 0, 0, sw, sh);
+  edBase = out;
+  edState.rot = 0; edState.flipH = false; edState.flipV = false;
+  edFlipHBtn.classList.remove('active');
+  edFlipVBtn.classList.remove('active');
+  exitCropMode();
+  edRender();
+}
+edCropApplyBtn.addEventListener('click', edApplyCrop);
+
+/* ── Geometry ── */
+edRotateBtn.addEventListener('click', () => { edState.rot = (edState.rot + 90) % 360; edRender(); });
+edFlipHBtn.addEventListener('click', () => { edState.flipH = !edState.flipH; edFlipHBtn.classList.toggle('active', edState.flipH); edRender(); });
+edFlipVBtn.addEventListener('click', () => { edState.flipV = !edState.flipV; edFlipVBtn.classList.toggle('active', edState.flipV); edRender(); });
+
+/* ── Adjustments: every slider re-renders the preview live ── */
+edSliders.forEach(s => s.el.addEventListener('input', () => {
+  edState.adj[s.key] = Number(s.el.value);
+  s.val.textContent = s.fmt(s.el.value);
+  document.querySelectorAll('.ed-presets button').forEach(b => b.classList.remove('active'));
+  edRender();
+}));
+
+/* Double-click a slider to reset it to its default */
+edSliders.forEach(s => s.el.addEventListener('dblclick', () => {
+  s.el.value = s.def;
+  edState.adj[s.key] = s.def;
+  s.val.textContent = s.fmt(s.def);
+  document.querySelectorAll('.ed-presets button').forEach(b => b.classList.remove('active'));
+  edRender();
+}));
+
+/* Warmth slider — tint overlay, double-click resets */
+edWarm.addEventListener('input', () => {
+  edState.warm = Number(edWarm.value);
+  edWarmVal.textContent = edWarm.value;
+  document.querySelectorAll('.ed-presets button').forEach(b => b.classList.remove('active'));
+  edRender();
+});
+edWarm.addEventListener('dblclick', () => {
+  edWarm.value = 0;
+  edState.warm = 0;
+  edWarmVal.textContent = '0';
+  document.querySelectorAll('.ed-presets button').forEach(b => b.classList.remove('active'));
+  edRender();
+});
+
+/* Vignette slider */
+edVig.addEventListener('input', () => {
+  edState.vig = Number(edVig.value);
+  edVigVal.textContent = edVig.value;
+  document.querySelectorAll('.ed-presets button').forEach(b => b.classList.remove('active'));
+  edRender();
+});
+edVig.addEventListener('dblclick', () => {
+  edVig.value = 0;
+  edState.vig = 0;
+  edVigVal.textContent = '0';
+  edRender();
+});
+
+/* Corner radius */
+edRad.addEventListener('input', () => {
+  edRadVal.textContent = edRad.value + '%';
+  edRender();
+  scheduleEdEstimate();
+});
+edRad.addEventListener('dblclick', () => {
+  edRad.value = 0;
+  edRadVal.textContent = '0%';
+  edRender();
+  scheduleEdEstimate();
+});
+
+/* ── Text tool ── */
+function selectEdText(i){
+  edSelText = i;
+  if (i < 0 || !edTexts[i]) {
+    edTextControls.hidden = true;
+    edRender();
+    return;
+  }
+  const it = edTexts[i];
+  edTextControls.hidden = false;
+  edTextInput.value = it.text;
+  edTextSize.value = it.size;
+  edTextSizeVal.textContent = it.size + '%';
+  edTextColor.value = it.color;
+  document.getElementById('edTextStroke').classList.toggle('active', !!it.stroke);
+  edRender();
+}
+
+edTextAdd.addEventListener('click', () => {
+  edTexts.push({ text: lang === 'ru' ? 'Текст' : 'Text', x: 0.5, y: 0.5, size: 8, color: '#ffffff', stroke: true, opacity: 1 });
+  selectEdText(edTexts.length - 1);
+  scheduleEdEstimate();
+});
+edTextInput.addEventListener('input', () => {
+  if (edTexts[edSelText]) {
+    edTexts[edSelText].text = edTextInput.value;
+    edRender();
+    scheduleEdEstimate();
+  }
+});
+edTextSize.addEventListener('input', () => {
+  if (edTexts[edSelText]) {
+    edTexts[edSelText].size = Number(edTextSize.value);
+    edTextSizeVal.textContent = edTextSize.value + '%';
+    edRender();
+    scheduleEdEstimate();
+  }
+});
+edTextColor.addEventListener('input', () => {
+  if (edTexts[edSelText]) {
+    edTexts[edSelText].color = edTextColor.value;
+    edRender();
+    scheduleEdEstimate();
+  }
+});
+edTextDel.addEventListener('click', () => {
+  if (edTexts[edSelText]) edTexts.splice(edSelText, 1);
+  selectEdText(-1);
+  scheduleEdEstimate();
+});
+
+/* Text position buttons + outline toggle + style presets */
+function edSetTextY(y){
+  if (edTexts[edSelText]) {
+    edTexts[edSelText].y = y;
+    edRender();
+    scheduleEdEstimate();
+  }
+}
+document.getElementById('edTextTop').addEventListener('click', () => edSetTextY(0.12));
+document.getElementById('edTextMid').addEventListener('click', () => edSetTextY(0.5));
+document.getElementById('edTextBot').addEventListener('click', () => edSetTextY(0.88));
+document.getElementById('edTextStroke').addEventListener('click', function(){
+  if (!edTexts[edSelText]) return;
+  edTexts[edSelText].stroke = !edTexts[edSelText].stroke;
+  this.classList.toggle('active', edTexts[edSelText].stroke);
+  edRender();
+  scheduleEdEstimate();
+});
+document.querySelectorAll('#edTextColorPresets button').forEach(b => {
+  b.style.background = b.dataset.c;
+  b.addEventListener('click', () => {
+    edTextColor.value = b.dataset.c;
+    edTextColor.dispatchEvent(new Event('input'));
+  });
+});
+document.getElementById('edTextStyleSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-ts]');
+  if (!b || !edTexts[edSelText]) return;
+  const it = edTexts[edSelText];
+  if (b.dataset.ts === 'title')  { it.size = 18; it.color = '#ffffff'; it.stroke = true;  it.opacity = 1; }
+  if (b.dataset.ts === 'caption'){ it.size = 5;  it.color = '#ffffff'; it.stroke = true;  it.opacity = 1; }
+  if (b.dataset.ts === 'wm')     { it.size = 10; it.color = '#ffffff'; it.stroke = false; it.opacity = 0.4; }
+  edTextInput.value = it.text;
+  edTextSize.value = it.size;
+  edTextSizeVal.textContent = it.size + '%';
+  edTextColor.value = it.color;
+  document.getElementById('edTextStroke').classList.toggle('active', !!it.stroke);
+  edRender();
+  scheduleEdEstimate();
+});
+
+/* Hold to compare with the untouched original */
+edCompareBtn.addEventListener('pointerdown', () => {
+  if (!edBase || edCompare) return;
+  edCompare = true;
+  edRender();
+});
+window.addEventListener('pointerup', () => {
+  if (edCompare) { edCompare = false; edRender(); }
+});
+
+document.querySelectorAll('.ed-presets button').forEach(b => b.addEventListener('click', () => {
+  edState.adj = { ...ED_PRESETS[b.dataset.preset] };
+  edState.warm = 0;
+  edWarm.value = 0;
+  edWarmVal.textContent = '0';
+  edState.vig = 0;
+  edVig.value = 0;
+  edVigVal.textContent = '0';
+  edSliders.forEach(s => { s.el.value = edState.adj[s.key]; s.val.textContent = s.fmt(s.el.value); });
+  document.querySelectorAll('.ed-presets button').forEach(x => x.classList.toggle('active', x === b));
+  edRender();
+}));
+
+/* Crop aspect ratio presets (0 = free) */
+let edCropAspect = 0;
+edAspectSeg.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-ar]');
+  if (!b) return;
+  edAspectSeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  edCropAspect = Number(b.dataset.ar) || 0;
+  if (edCropAspect && edCrop && edCrop.w > 0.01) {
+    edCrop.h = Math.min(1 - edCrop.y, edCrop.w / edCropAspect);
+    edCrop.w = edCrop.h * edCropAspect;
+    edDrawCropRect();
+  }
+});
+
+/* ── Export ── */
+edFormatSeg.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-format]');
+  if (!b) return;
+  edFormatSeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  edState.format = b.dataset.format;
+  edQualityWrap.hidden = edState.format === 'image/png';
+  scheduleEdEstimate();
+});
+edQuality.addEventListener('input', () => {
+  edQualityVal.textContent = edQuality.value + '%';
+  edState.quality = Number(edQuality.value);
+  scheduleEdEstimate();
+});
+
+/* Scale lives in the Геометрия section; double-click resets it */
+edScale.addEventListener('input', () => {
+  edScaleVal.textContent = edScale.value + '%';
+  edRender();
+});
+edScale.addEventListener('dblclick', () => {
+  edScale.value = 100;
+  edScaleVal.textContent = '100%';
+  edRender();
+});
+
+edSaveBtn.addEventListener('click', () => {
+  if (!edBase) return;
+  const { W, H } = edDims();
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  edPaint(c.getContext('2d'), W, H, 1, true);
+  const mime = edState.format;
+  const q = mime !== 'image/png' ? edState.quality / 100 : undefined;
+  c.toBlob(b => {
+    if (!b) { edError.textContent = t('ed.err.save'); return; }
+    const base = edName.replace(/\.[^.]+$/, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `${base}_mtools.${convExtFor(mime)}`;
+    a.click();
+    setTimeout((u) => URL.revokeObjectURL(u), 5000, a.href);
+    edInfo.textContent = `${t('ed.saved')} · ${W}×${H} · ${formatConvBytes(b.size)} · ${convExtFor(mime).toUpperCase()}`;
+  }, mime, q);
+});
+
+/* ── Wiring ── */
+function resetEditorState(){
+  edBase = null;
+  edOriginal = null;
+  edName = '';
+  edFile = null;
+  edFileSize = null;
+  edEstSize = null;
+  clearTimeout(edEstTimer);
+  edScale.value = 100;
+  edScaleVal.textContent = '100%';
+  edState.warm = 0;
+  edWarm.value = 0;
+  edWarmVal.textContent = '0';
+  edState.vig = 0;
+  edVig.value = 0;
+  edVigVal.textContent = '0';
+  edRad.value = 0;
+  edRadVal.textContent = '0%';
+  edTexts = [];
+  edSelText = -1;
+  edTextControls.hidden = true;
+  edCompare = false;
+  edTextDrag = null;
+  edCropAspect = 0;
+  edAspectSeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.ar === '0'));
+  resetEdZoom();
+  edZoomBadge.hidden = true;
+  exitCropMode();
+  edState.adj = { ...ED_DEFAULTS };
+  edSliders.forEach(s => { s.el.value = edState.adj[s.key]; s.val.textContent = s.fmt(s.el.value); });
+  document.querySelectorAll('.ed-presets button').forEach(x => x.classList.toggle('active', x.dataset.preset === 'reset'));
+  edState.rot = 0; edState.flipH = false; edState.flipV = false;
+  edFlipHBtn.classList.remove('active');
+  edFlipVBtn.classList.remove('active');
+  edWorkspace.hidden = true;
+  edDropzone.hidden = false;
+  edFileInput.value = '';
+  edError.textContent = '';
+}
+
+edPickBtn.addEventListener('click', (e) => { e.stopPropagation(); edFileInput.click(); });
+edDropzone.addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  edFileInput.click();
+});
+['dragenter','dragover'].forEach(ev => edDropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); edDropzone.classList.add('drag-over');
+}));
+['dragleave','drop'].forEach(ev => edDropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); edDropzone.classList.remove('drag-over');
+}));
+edDropzone.addEventListener('drop', (e) => {
+  const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+  if (f) edOpenFile(f);
+  else edError.textContent = 'Не найдено изображение среди перетащенных файлов.';
+});
+edFileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) edOpenFile(e.target.files[0]);
+});
+edResetBtn.addEventListener('click', resetEditorState);
+window.addEventListener('resize', () => {
+  if (!edWorkspace.hidden) { edClampPan(); edApplyTransform(); edSyncOverlay(); }
+});
+
+/* Panel tabs — one section at a time */
+document.querySelectorAll('.ed-tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.ed-tabs button').forEach(x => x.classList.toggle('active', x === b));
+  ['adjust', 'geo', 'text', 'export'].forEach(name => {
+    document.getElementById('edSec' + name[0].toUpperCase() + name.slice(1)).hidden = b.dataset.tab !== name;
+  });
+}));
+
+/* Keyboard in crop mode: Enter applies, Escape cancels */
+document.addEventListener('keydown', (e) => {
+  if (edWorkspace.hidden || !edCropMode) return;
+  if (e.key === 'Enter') { e.preventDefault(); edApplyCrop(); }
+  else if (e.key === 'Escape') { e.preventDefault(); exitCropMode(); }
+});
+
+/* ── Zoom (mouse wheel / buttons) and pan (drag when zoomed in) ── */
+let edZoom = 1;
+let edPanX = 0;
+let edPanY = 0;
+let edPanDrag = null;
+
+function edApplyTransform(){
+  edCanvas.style.transform = `translate(${edPanX}px, ${edPanY}px) scale(${edZoom})`;
+  edZoomVal.textContent = Math.round(edZoom * 100) + '%';
+  edStage.classList.toggle('ed-zoomed', edZoom > 1);
+}
+
+function edClampPan(){
+  const maxX = Math.max(0, (edCanvas.offsetWidth * edZoom - edStage.clientWidth) / 2 + 24);
+  const maxY = Math.max(0, (edCanvas.offsetHeight * edZoom - edStage.clientHeight) / 2 + 24);
+  edPanX = Math.min(maxX, Math.max(-maxX, edPanX));
+  edPanY = Math.min(maxY, Math.max(-maxY, edPanY));
+}
+
+function edSetZoom(nz, cx = 0, cy = 0){
+  nz = Math.min(10, Math.max(1, nz));
+  const k = nz / edZoom;
+  edPanX = cx * (1 - k) + edPanX * k;
+  edPanY = cy * (1 - k) + edPanY * k;
+  edZoom = nz;
+  if (edZoom === 1) { edPanX = 0; edPanY = 0; }
+  edClampPan();
+  edApplyTransform();
+}
+
+function resetEdZoom(){
+  edZoom = 1;
+  edPanX = 0;
+  edPanY = 0;
+  edApplyTransform();
+}
+
+edStage.addEventListener('wheel', (e) => {
+  if (!edBase || edCropMode) return;
+  e.preventDefault();
+  const r = edStage.getBoundingClientRect();
+  const cx = e.clientX - r.left - r.width / 2;
+  const cy = e.clientY - r.top - r.height / 2;
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  edSetZoom(edZoom * factor, cx, cy);
+}, { passive: false });
+
+edZoomIn.addEventListener('click', () => edSetZoom(edZoom * 1.25));
+edZoomOut.addEventListener('click', () => edSetZoom(edZoom / 1.25));
+edZoomReset.addEventListener('click', resetEdZoom);
+
+edCanvas.addEventListener('pointerdown', (e) => {
+  if (!edBase || edCropMode) return;
+  const r = edCanvas.getBoundingClientRect();
+  const nx = (e.clientX - r.left) / r.width;
+  const ny = (e.clientY - r.top) / r.height;
+  // Text hit-test takes priority (works at any zoom)
+  if (edTexts.length) {
+    const tctx = edCanvas.getContext('2d');
+    const dims = edDims();
+    for (let i = edTexts.length - 1; i >= 0; i--) {
+      const it = edTexts[i];
+      const fs = Math.max(8, (it.size / 100) * edBase.height);
+      tctx.font = `600 ${fs}px "Space Grotesk", "Inter", sans-serif`;
+      const tw = tctx.measureText(it.text || ' ').width;
+      if (Math.abs(nx - it.x) * dims.W < tw / 2 + fs * 0.3 && Math.abs(ny - it.y) * dims.H < fs * 0.75) {
+        selectEdText(i);
+        edTextDrag = { i, dx: it.x - nx, dy: it.y - ny };
+        edCanvas.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+  if (edZoom > 1) {
+    e.preventDefault();
+    edPanDrag = { x: e.clientX, y: e.clientY, px: edPanX, py: edPanY };
+    edCanvas.setPointerCapture(e.pointerId);
+    edStage.classList.add('ed-panning');
+  } else if (edSelText !== -1) {
+    selectEdText(-1); // click on empty space deselects the text
+  }
+});
+edCanvas.addEventListener('pointermove', (e) => {
+  if (edTextDrag) {
+    const r = edCanvas.getBoundingClientRect();
+    const it = edTexts[edTextDrag.i];
+    if (!it) return;
+    it.x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width + edTextDrag.dx));
+    it.y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height + edTextDrag.dy));
+    edRender();
+    return;
+  }
+  if (!edPanDrag) return;
+  edPanX = edPanDrag.px + (e.clientX - edPanDrag.x);
+  edPanY = edPanDrag.py + (e.clientY - edPanDrag.y);
+  edClampPan();
+  edApplyTransform();
+});
+window.addEventListener('pointerup', () => {
+  if (edTextDrag) edTextDrag = null;
+  if (edPanDrag) { edPanDrag = null; edStage.classList.remove('ed-panning'); }
+});
+
+/* =========================================================================
+   YT-DLP AUTO-UPDATER — checked once on startup. A stale yt-dlp breaks
+   YouTube downloads (e.g. HTTP 403), so offer to pull the latest version
+   from PyPI without reinstalling the whole app.
+   ========================================================================= */
+async function checkYtdlpOnStartup(){
+  try {
+    const res = await fetch('/api/ytdlp/version');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.update_available) {
+      ytdlpCurrent.textContent = data.current || '?';
+      ytdlpLatest.textContent = data.latest || '?';
+      ytdlpModalOverlay.hidden = false;
+    }
+  } catch (e) { /* offline / unreachable — skip silently */ }
+}
+
+ytdlpModalDismissBtn.addEventListener('click', () => {
+  ytdlpModalOverlay.hidden = true;
+});
+
+ytdlpManualBtn.addEventListener('click', () => {
+  window.open('https://github.com/yt-dlp/yt-dlp/releases', '_blank');
+});
+
+ytdlpUpdateBtn.addEventListener('click', async () => {
+  ytdlpModalError.textContent = '';
+  ytdlpUpdateBtn.disabled = true;
+  ytdlpManualBtn.disabled = true;
+  ytdlpModalDismissBtn.hidden = true;
+  ytdlpModalProgress.hidden = false;
+  ytdlpModalProgressBar.style.width = '0%';
+  ytdlpModalProgressLabel.textContent = t('yd.prog.start');
+  try {
+    const startRes = await fetch('/api/ytdlp/update/start', { method: 'POST' });
+    if (!startRes.ok) throw new Error(t('yd.err.start'));
+    const { job_id } = await startRes.json();
+
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 5 * 60 * 1000; // 5 min safety net
+    while (true) {
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        throw new Error(t('yd.err.timeout'));
+      }
+      await sleep(500);
+      const progRes = await fetch('/api/ytdlp/update/progress?id=' + encodeURIComponent(job_id));
+      if (!progRes.ok) continue;
+      const jobData = await progRes.json();
+      if (jobData.status === 'downloading') {
+        const pct = jobData.percent;
+        if (pct != null) {
+          ytdlpModalProgressBar.style.width = pct + '%';
+          ytdlpModalProgressLabel.textContent = `${t('yd.prog.dl')}: ${pct.toFixed(0)}%`;
+        } else {
+          ytdlpModalProgressBar.style.width = '50%';
+          ytdlpModalProgressLabel.textContent = t('yd.prog.dl') + '…';
+        }
+      } else if (jobData.status === 'extracting') {
+        ytdlpModalProgressBar.style.width = '95%';
+        ytdlpModalProgressLabel.textContent = t('yd.prog.unpack');
+      } else if (jobData.status === 'finished') {
+        ytdlpModalProgressBar.style.width = '100%';
+        ytdlpModalProgressLabel.textContent = t('yd.done');
+        break;
+      } else if (jobData.status === 'error') {
+        throw new Error(jobData.error || t('yd.err'));
+      }
+      // status === 'starting' → keep waiting
+    }
+  } catch (err) {
+    ytdlpModalError.textContent = err.message;
+    ytdlpModalProgressLabel.textContent = t('yd.err');
+  } finally {
+    ytdlpUpdateBtn.disabled = false;
+    ytdlpManualBtn.disabled = false;
+    ytdlpModalDismissBtn.hidden = false;
+  }
+});
+
+checkYtdlpOnStartup();
+
+/* ── Language switcher, settings gear, first-run language choice ── */
+document.getElementById('langToggle').addEventListener('click', () => setLang(lang === 'ru' ? 'en' : 'ru'));
+const resetOnHomeChk = document.getElementById('resetOnHomeChk');
+resetOnHomeChk.checked = appSettings.resetOnHome !== false;
+resetOnHomeChk.addEventListener('change', () => {
+  appSettings.resetOnHome = resetOnHomeChk.checked;
+  saveSettings();
+});
+document.getElementById('gearBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const pop = document.getElementById('settingsPop');
+  pop.hidden = !pop.hidden;
+});
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('settingsPop');
+  if (!pop.hidden && !e.target.closest('.settings-wrap')) pop.hidden = true;
+});
+document.getElementById('pickRuBtn').addEventListener('click', () => {
+  document.getElementById('langModalOverlay').hidden = true;
+  setLang('ru');
+});
+document.getElementById('pickEnBtn').addEventListener('click', () => {
+  document.getElementById('langModalOverlay').hidden = true;
+  setLang('en');
+});
+
+applyLang();
+
+/* The first-run prompt is decided AFTER the server settings arrive: the port
+   can drift between launches and localStorage does not survive that, so the
+   on-disk settings are the source of truth for "has the user chosen". */
+fetch('/api/ui-settings').then(r => r.ok ? r.json() : {}).catch(() => ({})).then(srv => {
+  settingsReady = true;
+  if (srv && typeof srv === 'object' && (srv.lang != null || srv.resetOnHome != null)) {
+    Object.assign(appSettings, srv);
+    if (appSettings.lang && appSettings.lang !== lang) lang = appSettings.lang;
+  }
+  applyLang();
+  resetOnHomeChk.checked = appSettings.resetOnHome !== false;
+  saveSettings(); // persist the merged state (creates the file on first run)
+  if (!appSettings.lang) document.getElementById('langModalOverlay').hidden = false;
+});
 
 // Initial route
 const initialHash = location.hash.replace('#', '') || 'home';

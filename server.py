@@ -64,7 +64,6 @@ def log_error(context, exc):
 
 # ffmpeg for yt-dlp: use bundled in frozen EXE (if exists), else system
 if getattr(sys, 'frozen', False):
-    BASE_DIR = Path(sys._MEIPASS)
     bundled_ffmpeg = BASE_DIR / "ffmpeg.exe"
     debug_log = BASE_DIR.parent / "mtools_debug.log"
     debug_lines = [
@@ -95,7 +94,6 @@ if getattr(sys, 'frozen', False):
     if FFMPEG_PATH:
         os.environ['PATH'] = str(BASE_DIR) + os.pathsep + os.environ.get('PATH', '')
 else:
-    BASE_DIR = Path(__file__).parent
     FFMPEG_PATH = None
 
 # Redirect stderr to avoid crashes in no-console mode
@@ -116,6 +114,12 @@ if not sys.stderr:
 #   {"youtube_cookies_file": "C:\\path\\to\\cookies.txt"}   (exported via a browser extension)
 CONFIG_PATH = BASE_DIR / "mtools_config.json"
 
+# UI settings (language, behavior toggles) live in a fixed per-user folder —
+# NOT in localStorage: the server picks a new port whenever 8000 is busy and
+# localStorage is per-origin (localhost:8000 ≠ localhost:8001), so browser
+# storage silently forgets everything between launches.
+UI_SETTINGS_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "MTools" / "ui_settings.json"
+
 def load_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -135,6 +139,20 @@ APP_CONFIG = load_config()
 # Where the auto-installer puts ffmpeg — a per-user folder that never
 # needs admin rights, independent of where MTools itself is installed.
 FFMPEG_INSTALL_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "MTools" / "ffmpeg"
+
+
+# ── yt-dlp auto-updater ───────────────────────────────────────
+# YouTube constantly changes its anti-bot protection, so a stale yt-dlp
+# quickly breaks downloads (e.g. HTTP 403). The frozen EXE bundles a fixed
+# yt-dlp, but we let the user pull a newer one without reinstalling the whole
+# app: the latest yt-dlp wheel is downloaded into a per-user folder and
+# prepended to sys.path, overriding the bundled copy on the next launch.
+YTDLP_PATCH_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "MTools" / "yt_dlp_patch"
+YTDLP_PYPI_API = "https://pypi.org/pypi/yt-dlp/json"
+
+if YTDLP_PATCH_DIR.is_dir():
+    # Take precedence over the bundled copy for any future `import yt_dlp`.
+    sys.path.insert(0, str(YTDLP_PATCH_DIR))
 
 
 def detect_ffmpeg():
@@ -174,12 +192,13 @@ def friendly_youtube_error(exc):
     if "Sign in to confirm" in msg or "not a bot" in msg:
         return (
             "YouTube запросил подтверждение «не бот» для этого видео. "
-            "Что можно сделать: 1) обновите yt-dlp командой "
-            "\"pip install -U yt-dlp\" (YouTube часто меняет защиту, и это "
-            "обычно самый эффективный способ); 2) если не помогло, настройте "
-            "куки — создайте файл mtools_config.json рядом с server.py с "
-            "содержимым {\"youtube_cookies_browser\": \"chrome\"} (укажите "
-            "браузер, где вы залогинены в YouTube) и перезапустите сервер."
+            "Что можно сделать: 1) перезапустите MTools — программа сама "
+            "предложит обновить yt-dlp до свежей версии (YouTube часто "
+            "меняет защиту, и обновление обычно решает проблему); "
+            "2) если не помогло, настройте куки — создайте файл "
+            "mtools_config.json рядом с программой с содержимым "
+            "{\"youtube_cookies_browser\": \"chrome\"} (укажите браузер, "
+            "где вы залогинены в YouTube) и перезапустите сервер."
         )
     return msg
 
@@ -498,6 +517,165 @@ def run_ffmpeg_install_job(job_id):
             except OSError: pass
 
 
+# ── yt-dlp auto-updater ───────────────────────────────────────
+# Mirrors the FFmpeg auto-installer: check PyPI for a newer yt-dlp than the
+# one currently in use, then (on request) download the wheel and unpack the
+# `yt_dlp` package into YTDLP_PATCH_DIR so it overrides the bundled copy.
+YTDLP_JOBS = {}
+YTDLP_JOBS_LOCK = threading.Lock()
+
+
+def get_current_ytdlp_version():
+    try:
+        from yt_dlp import version as _v
+        return _v.__version__
+    except Exception:
+        return None
+
+
+def _parse_ver(v):
+    """Best-effort version tuple for comparison. yt-dlp uses date-based
+    versions like 2026.8.19; split on '.' and take leading ints."""
+    out = []
+    for part in (v or "").split("."):
+        m = re.match(r"\d+", part)
+        out.append(int(m.group(0)) if m else 0)
+    return tuple(out)
+
+
+def get_latest_ytdlp_release():
+    req = urllib.request.Request(
+        YTDLP_PYPI_API, headers={"User-Agent": "MTools"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    latest = data["info"]["version"]
+    wheel = None
+    for u in data.get("urls", []):
+        if u.get("packagetype") == "bdist_wheel":
+            wheel = u
+            break
+    if not wheel:
+        for u in data.get("urls", []):
+            if u.get("packagetype") == "sdist":
+                wheel = u
+                break
+    if not wheel:
+        raise RuntimeError("Не удалось найти пакет yt-dlp на PyPI.")
+    return {
+        "version": latest,
+        "url": wheel.get("url"),
+        "filename": wheel.get("filename"),
+        "size": wheel.get("size"),
+    }
+
+
+def check_ytdlp_update():
+    current = get_current_ytdlp_version()
+    try:
+        rel = get_latest_ytdlp_release()
+    except Exception as e:
+        return {
+            "current": current, "latest": None,
+            "update_available": False, "error": str(e),
+        }
+    latest = rel["version"]
+    available = bool(current and latest and _parse_ver(latest) > _parse_ver(current))
+    return {
+        "current": current, "latest": latest,
+        "update_available": available, "url": rel["url"],
+    }
+
+
+def run_ytdlp_update_job(job_id):
+    with YTDLP_JOBS_LOCK:
+        YTDLP_JOBS[job_id] = {
+            "status": "starting", "downloaded": 0, "total": None,
+            "percent": 0, "error": None, "version": None,
+        }
+    wheel_path = None
+    try:
+        rel = get_latest_ytdlp_release()
+        if not rel["url"]:
+            raise RuntimeError("Не удалось найти пакет yt-dlp на PyPI.")
+        with YTDLP_JOBS_LOCK:
+            job = YTDLP_JOBS.get(job_id)
+            if job:
+                job["status"] = "downloading"
+                job["total"] = rel.get("size")
+                job["version"] = rel["version"]
+
+        YTDLP_PATCH_DIR.mkdir(parents=True, exist_ok=True)
+        wheel_path = YTDLP_PATCH_DIR / (rel["filename"] or "yt_dlp_update.whl")
+        req = urllib.request.Request(rel["url"], headers={"User-Agent": "MTools"})
+        hasher = hashlib.sha256()
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            total = int(resp.headers.get("Content-Length") or rel.get("size") or 0) or None
+            downloaded = 0
+            with open(wheel_path, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    hasher.update(chunk)
+                    downloaded += len(chunk)
+                    with YTDLP_JOBS_LOCK:
+                        job = YTDLP_JOBS.get(job_id)
+                        if not job:
+                            return  # job dismissed client-side
+                        job["downloaded"] = downloaded
+                        job["total"] = total
+                        job["percent"] = round(downloaded / total * 100, 1) if total else None
+
+        with YTDLP_JOBS_LOCK:
+            job = YTDLP_JOBS.get(job_id)
+            if job:
+                job["status"] = "extracting"
+
+        # The wheel is a zip; unpack only the `yt_dlp/` package folder into
+        # YTDLP_PATCH_DIR so `import yt_dlp` resolves to the fresh copy.
+        target_pkg = YTDLP_PATCH_DIR / "yt_dlp"
+        if target_pkg.exists():
+            shutil.rmtree(target_pkg)
+        with zipfile.ZipFile(wheel_path) as zf:
+            for member in zf.namelist():
+                if not member.startswith("yt_dlp/") or member.endswith("/"):
+                    continue
+                dest = target_pkg / member[len("yt_dlp/"):]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as src, open(dest, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+
+        try:
+            wheel_path.unlink()
+        except OSError:
+            pass
+        try:
+            (YTDLP_PATCH_DIR / "version.txt").write_text(rel["version"], encoding="utf-8")
+        except OSError:
+            pass
+
+        with YTDLP_JOBS_LOCK:
+            job = YTDLP_JOBS.get(job_id)
+            if job:
+                job["status"] = "finished"
+                job["percent"] = 100
+    except Exception as e:
+        log_error("run_ytdlp_update_job", e)
+        with YTDLP_JOBS_LOCK:
+            job = YTDLP_JOBS.get(job_id)
+            if job:
+                job["status"] = "error"
+                job["error"] = str(e)
+    finally:
+        if wheel_path:
+            try:
+                wheel_path.unlink()
+            except OSError:
+                pass
+
+
 def run_download_job(job_id, url, fmt, quality):
     tmp_dir = tempfile.mkdtemp(prefix="mtools_yt_")
     with DOWNLOAD_JOBS_LOCK:
@@ -673,6 +851,12 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_ffmpeg_status()
         elif parsed.path == "/api/ffmpeg/install/progress":
             self._handle_ffmpeg_install_progress(parsed)
+        elif parsed.path == "/api/ytdlp/version":
+            self._handle_ytdlp_version()
+        elif parsed.path == "/api/ytdlp/update/progress":
+            self._handle_ytdlp_update_progress(parsed)
+        elif parsed.path == "/api/ui-settings":
+            self._handle_ui_settings_get()
         else:
             super().do_GET()
 
@@ -683,6 +867,10 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_youtube_download_cancel()
         elif self.path == "/api/ffmpeg/install/start":
             self._handle_ffmpeg_install_start()
+        elif self.path == "/api/ytdlp/update/start":
+            self._handle_ytdlp_update_start()
+        elif self.path == "/api/ui-settings":
+            self._handle_ui_settings_post()
         elif self.path == "/api/tab-closing":
             self._handle_tab_closing()
         elif self.path == "/api/cancel-shutdown":
@@ -910,6 +1098,58 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
                 "error": job["error"],
                 "path": job["path"],
             })
+
+    def _handle_ytdlp_version(self):
+        self._send_json(check_ytdlp_update())
+
+    def _handle_ytdlp_update_start(self):
+        job_id = uuid.uuid4().hex
+        threading.Thread(
+            target=run_ytdlp_update_job, args=(job_id,), daemon=True,
+        ).start()
+        self._send_json({"job_id": job_id})
+
+    def _handle_ytdlp_update_progress(self, parsed):
+        params = urllib.parse.parse_qs(parsed.query)
+        job_id = params.get("id", [None])[0]
+        with YTDLP_JOBS_LOCK:
+            job = YTDLP_JOBS.get(job_id)
+            if not job:
+                self._send_json({"error": "Unknown job"}, 404)
+                return
+            self._send_json({
+                "status": job["status"],
+                "downloaded": job["downloaded"],
+                "total": job["total"],
+                "percent": job["percent"],
+                "error": job["error"],
+                "version": job["version"],
+            })
+
+    def _handle_ui_settings_get(self):
+        try:
+            with open(UI_SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        self._send_json(data if isinstance(data, dict) else {})
+
+    def _handle_ui_settings_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+        except Exception:
+            self._send_json({"error": "Invalid request"}, 400)
+            return
+        try:
+            UI_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(UI_SETTINGS_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+        self._send_json({"ok": True})
 
     def _handle_tab_closing(self):
         # Fired via navigator.sendBeacon on pagehide (real tab close,
