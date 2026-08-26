@@ -189,7 +189,6 @@ Trim video & audio · Download from YouTube · Make GIFs · Edit images
 
 ---
 
-> [!NOTE]
 > A desktop app built with Python + vanilla JS: it starts a local server and opens the UI in your browser.
 > Trimming and the editor run on **ffmpeg.wasm** right in the browser; YouTube downloads use **yt-dlp** on the server side.
 > No external servers, no telemetry — files never leave your computer.
