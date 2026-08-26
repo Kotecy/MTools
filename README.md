@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://i.ibb.co/6ckzcSLw/mt.jpg" width="96" alt="MTools" />
+<img src="https://i.ibb.co/TMvZNdZ2/mt.jpg" width="96" alt="MTools" />
 
 # MTools
 
@@ -172,7 +172,7 @@ MIT
 
 <div align="center">
 
-<img src="https://i.ibb.co/6ckzcSLw/mt.jpg" width="96" alt="MTools" />
+<img src="https://i.ibb.co/TMvZNdZ2/mt.jpg" width="96" alt="MTools" />
 
 # MTools
 
