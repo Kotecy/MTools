@@ -8,7 +8,7 @@
 
 Обрезка видео и аудио · Скачивание с YouTube · Создание GIF · Редактор изображений
 
-[![Version](https://img.shields.io/badge/version-V0.810C-6ee7b7)](../../releases)
+[![Version](https://img.shields.io/badge/version-V0.810F-6ee7b7)](../../releases)
 [![Platform](https://img.shields.io/badge/platform-Windows-blue)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](#-лицензия)
 [![Engine](https://img.shields.io/badge/YouTube-yt--dlp-red)](https://github.com/yt-dlp/yt-dlp)
@@ -164,58 +164,153 @@ MIT
 ---
 
 <a id="english"></a>
+
+<details>
+<summary><h2>🇬🇧 English</h2></summary>
+
 <div align="center">
 
 <img src="https://i.ibb.co/JjNq6snp/mt.jpg" width="80" alt="MTools" />
-
-## MTools
 
 **Media tools right in your browser. Local. Cloud-free.**
 
 Trim video & audio · Download from YouTube · Make GIFs · Edit images
 
-[![Version](https://img.shields.io/badge/version-V0.810C-6ee7b7)](../../releases)
-
 </div>
 
-> [!NOTE]
 > A desktop app built with Python + vanilla JS: it starts a local server and opens the UI in your browser.
 > Trimming and the editor run on **ffmpeg.wasm** right in the browser; YouTube downloads use **yt-dlp** on the server side.
 > No external servers, no telemetry — files never leave your computer.
 
 ### ✂️ Media Trimmer
-Drag'n'drop **MP4, WEBM, MP3, WAV** · waveform / thumbnail timeline · markers, scrubbing, **Space** to pause · **fast cut** (stream copy) or **precise** re-encoding to the millisecond · `_mtools` suffix in saved names.
+
+- Drag'n'drop **MP4, WEBM, MP3, WAV**
+- Visual timeline: waveform for audio, preview thumbnails for video
+- Start/end markers, scrubbing, **Space** to pause, volume slider on hover
+- **Fast cut** (stream copy, lossless) or **precise** re-encoding to the millisecond
+- Saved via browser dialog with `_mtools` suffix
 
 ### ⬇️ YouTube Downloader
-Link → title, channel, duration, views, thumbnail · **MP4** up to 4K or **MP3** (128–320 kbps) · honest quality list · live progress with speed & ETA · cancel anytime · bot-check bypass, network-hiccup resilience · Cyrillic filenames (RFC 5987).
+
+- Paste a link → title, channel, duration, views, thumbnail
+- **MP4** up to 4K or **MP3** (128–320 kbps)
+- Honest quality list — only what the video actually has
+- Live progress: percentage, speed, ETA + cancel anytime
+- Bot-check bypass, resilient to network drops
+- Cyrillic filenames support (RFC 5987)
 
 ### 🎞 GIF Maker
-**From pictures**: drop a batch of frames, reorder with arrows · **from video**: MP4/WebM with start/length sliders, rotation & flips, and a live looping fragment preview · quality presets (64/128/256 colors), smoothing: Bayer / Floyd–Steinberg / Sierra-2 / none · live build progress and a **preview of the finished GIF** · 1–30 fps, 10–100% size, loop count.
+
+- **From pictures**: drop a batch of frames → animation, reorder with arrows on thumbnails
+- **From video**: MP4/WebM → start & duration sliders, preview loops the selected fragment instantly
+- Rotation & flips — in both preview and exported GIF
+- Quality presets (64/128/256 colors), smoothing: Bayer / Floyd–Steinberg / Sierra-2 / none
+- Live build progress and **finished GIF preview** right in the viewport
+- Speed 1–30 fps, size 10–100%, loop count, quality palette via ffmpeg (palettegen + paletteuse)
 
 ### ✏️ Image Editor
-Live preview of every change + **wheel zoom** and drag-panning · **crop** with 1:1 / 4:3 / 16:9 / free ratios (Enter apply, Esc cancel) · **text on image** — drag, position buttons, outline, Heading/Caption/Watermark styles · brightness, contrast, saturation, hue, blur, **warmth**, **vignette** · presets: Original, B&W, Sepia, Cold, Warm, Vintage, Noir, Chrome, Invert · geometry: scale 10–200%, rotate, flips, **corner radius** · hold-to-**compare with original** · **before → ≈ after** size estimate · export to **PNG / JPEG / WEBP**.
 
-### 🌐 Two languages
-**RU / EN** round switcher in the top right, asked on first launch. Gear → settings: a "reset loaded content on going home" toggle. Fully offline, built-in dictionary.
+- **Live preview** of every change + **mouse wheel zoom** and drag panning
+- **Crop** with ratios: free, 1:1, 4:3, 16:9 (Enter — apply, Esc — cancel)
+- **Text on image** — add, drag with the mouse, position buttons (top/center/bottom), outline, Heading/Caption/Watermark styles
+- Adjustments: brightness, contrast, saturation, hue, blur, **warmth**, **vignette**
+- Presets: Original, B&W, Sepia, Cold, Warm, Vintage, Noir, Chrome, Invert
+- Geometry: scale 10–200%, rotate, flips, **corner radius**
+- **Compare with original** button — hold to see before/after
+- Result size estimate **"before → ≈ after"** right under the preview
+- Export to **PNG / JPEG / WEBP** with quality control
 
-### ⬆️ yt-dlp auto-update
-YouTube changes its protection often — a stale yt-dlp breaks downloads (HTTP 403). On startup MTools checks PyPI and offers a **one-click update**, no admin rights needed.
+### 🌐 Two Languages
+
+**RU / EN** — round button in the top right. The app asks for your language on first launch.
+Gear → settings: a "reset loaded content on going home" toggle. Fully offline, built-in dictionary.
+
+### ⬆️ yt-dlp Auto-Update
+
+YouTube changes its protection often — a stale yt-dlp breaks downloads (HTTP 403).
+MTools checks PyPI on startup and offers a **one-click update**, no admin rights needed.
+
+### 📸 Screenshots
+
+<div align="center">
+
+| Home | Video Editor | YouTube |
+|---|---|---|
+| ![Home](https://i.ibb.co/pvPqH70v/image.png) | ![Editor](https://i.ibb.co/Z1mrpFtc/image.png) | ![YouTube](https://i.ibb.co/99b6XmjM/image.png) |
+
+</div>
 
 ### ⚙️ Install
-**Windows EXE**: grab `MTools.exe` from [releases](../../releases), run it — the UI opens at `http://localhost:8000`. Everything is bundled.
+
+**Windows EXE**: download `MTools.exe` from [releases](../../releases), run it — the UI opens at `http://localhost:8000`. Everything is bundled: Python, yt-dlp, ffmpeg.wasm. FFmpeg for YouTube auto-installs if needed. Close the tab — the server stops automatically.
 
 **From source**:
 ```bash
-git clone https://github.com/Kotecy/MTools && cd MTools
+git clone https://github.com/Kotecy/MTools
+cd MTools
 pip install yt-dlp
 python server.py
 ```
 
-**Build EXE**:
+### 🔧 Build EXE
+
 ```bash
 pip install yt-dlp pyinstaller
-pyinstaller build.spec   # → dist/MTools.exe
+pyinstaller build.spec
 ```
 
+Output: `dist/MTools.exe`
+
+### 🛠 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3, `http.server` + Threading, yt-dlp |
+| Frontend | Vanilla JS, ffmpeg.wasm, Canvas API, Web Audio |
+| Packaging | PyInstaller — single-file EXE, no console |
+
+### 🌐 API
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/youtube/info?url=` | Video info |
+| POST | `/api/youtube/download/start` | Start download → `job_id` |
+| GET | `/api/youtube/progress?id=` | Progress |
+| POST | `/api/youtube/download/cancel` | Cancel |
+| GET | `/api/youtube/download/file?id=` | Finished file |
+| GET | `/api/ffmpeg/status` | FFmpeg availability |
+| POST | `/api/ffmpeg/install/start` | Auto-install FFmpeg |
+| GET | `/api/ffmpeg/install/progress` | Install progress |
+| GET | `/api/ytdlp/version` | Check yt-dlp updates |
+| POST | `/api/ytdlp/update/start` | Update yt-dlp |
+| GET | `/api/ytdlp/update/progress?id=` | Update progress |
+| GET/POST | `/api/ui-settings` | UI settings |
+| POST | `/api/cancel-shutdown` · `/api/shutdown` | Server lifecycle |
+
+### ❓ FAQ
+
+<details>
+<summary><b>YouTube asks me to confirm I'm not a bot?</b></summary>
+Restart MTools — it will offer to update yt-dlp automatically. If that doesn't help: create a <code>mtools_config.json</code> file next to the app with <code>{"youtube_cookies_browser": "chrome"}</code> and restart.
+</details>
+
+<details>
+<summary><b>Where do I look for errors?</b></summary>
+<code>mtools_error.log</code> next to the app — full details instead of a vague browser error.
+</details>
+
+<details>
+<summary><b>Does the server shut down on its own?</b></summary>
+Yes, 10 seconds after you close the tab. Reloading the page cancels the shutdown.
+</details>
+
+<details>
+<summary><b>Do I need FFmpeg?</b></summary>
+Not for trimming (it runs in-browser via ffmpeg.wasm). Yes for YouTube downloads and GIF building — MTools will offer to install it automatically, no admin rights needed.
+</details>
+
 ### ⚖️ License
+
 MIT
+
+</details>
